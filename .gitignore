@@ -1,0 +1,48 @@
+# ============================================================
+#  BDD Customer Intelligence Skill
+# ============================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# ---- 系统垃圾 ----
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*.lnk
+
+# ---- 编辑器 / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Office 临时锁文件 ----
+~$*
+
+# ---- 临时 / 日志 ----
+*.log
+*.tmp
+*.temp
+_tmp/
+.tmp/
+
+# ---- 安全兜底：密钥与凭据一律不入库 ----
+.env
+.env.*
+config.json
+secrets.json
+credentials.json
+*.key
+*.pem
+*.p12
+*.pfx
