@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-archive_report.py — BDD Customer Intelligence Skill V1.1.4 归档层
+archive_report.py — BDD Customer Intelligence Skill V1.1.5 归档层
 
 职责：把一份已完成的客户背调报告（.md + .pdf）归档到本机「客户档案库」
+      —— **档案库是唯一存放地**：归档成功后清理工作区根目录的那一份（V1.1.5）
 ============================================================
 
 【归档层隔离要求 — 硬要求，不可绕过】
@@ -32,16 +33,28 @@ archive_report.py — BDD Customer Intelligence Skill V1.1.4 归档层
       域名 / 报告清单；非数据库、非业务模块；丢失可从目录内既有报告自动重建）
   **本层不参与任何判断。** 13 字段 / Path 规则 / Evidence Policy / 三页 PDF 全部未改。
 
+【V1.1.5 Single-Home Patch —— 档案库为唯一存放地】
+    · 归档成功后**清理源文件**（工作区根目录那一份），消除「根目录 + 档案库」两份重复；
+    · **安全性质（四条，不可绕过）**：
+        ① 只有**归档成功且逐字节 sha256 校验通过**之后，才允许删除源文件；
+        ② 归档失败 / 目标已存在 / 校验不一致 → **一个源文件都不删**（除非已确认档案副本一致）；
+        ③ 源文件本身位于档案库内 → **不删**（否则会毁掉档案副本）；
+        ④ `--dry-run` 与 `--keep-source` → **不删**；
+    · `--keep-source` 可退回旧行为（保留源文件，供调试 / 需要平铺视图时使用）；
+    · 交付地址随之变更：**交付物在档案库客户目录内**，不再另留一份在工作区根。
+    · 本 Patch **只改归档层**，渲染层（`render_pdf.py`）与判断层零改动。
+
 用法：
   python archive_report.py <report.md> [--pdf <report.pdf>] [--archive-root <dir>]
                            [--company "<登记全称>"] [--domain <域名>] [--date YYYY-MM-DD]
-                           [--time HHMM] [--force-new] [--list] [--dry-run]
+                           [--time HHMM] [--force-new] [--keep-source] [--list] [--dry-run]
 
   默认：
     · `--pdf`  省略时取 `<report>.pdf`
     · `--company` 省略时从 Markdown 主卡「公司 Company」读取
     · `--domain`  省略时从 Markdown 内引用域名自动推断（标注 auto，可人工覆盖）
     · `--date`    省略时取报告文件名中的日期，取不到用当天
+    · 归档成功后**清理源文件**；`--keep-source` 则不清理（退回 V1.1.4 行为）
 
 退出码：0 正常（含 --list 与 --dry-run）/ 2 输入不存在 / 3 主卡读不出公司名
         / 4 归档失败 / 6 归档根落在 Skill 源码目录内（已拒绝）
@@ -507,8 +520,38 @@ def unique_pair(folder: Path, base: str, hhmm: str):
             raise RuntimeError("同名版本过多（>99），请人工整理档案目录。")
 
 
+def safe_cleanup_source(src: Path, archive_root: Path, keep: bool):
+    """归档成功后的源文件清理（V1.1.5）。
+
+    **调用方必须先确认：该内容已存在于档案库、且逐字节一致。**
+
+    四条护栏（不可绕过）：
+      ① `keep=True`（--keep-source）→ 不删
+      ② 源文件位于档案库内 → 不删（否则会毁掉档案副本）
+      ③ 源文件不存在 → 什么都不做
+      ④ 删除失败 → 只告警，不影响归档结果
+
+    返回 (是否已删除, 说明)。
+    """
+    if keep:
+        return False, "保留（--keep-source）"
+    if not src.is_file():
+        return False, "源文件已不存在"
+    try:
+        r = src.resolve()
+        if r == archive_root or archive_root in r.parents:
+            return False, "源文件位于档案库内，未删除"
+    except OSError:
+        pass
+    try:
+        src.unlink()
+        return True, "已清理"
+    except OSError as e:  # noqa: BLE001
+        return False, f"清理失败：{e}"
+
+
 def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
-            cli_time, cli_root, force_new, dry_run):
+            cli_time, cli_root, force_new, dry_run, keep_source=False):
     if not md_path.is_file():
         log(f"[FAIL] 报告不存在：{md_path}")
         return 2
@@ -543,7 +586,7 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
     root, root_src = resolve_archive_root(cli_root, md_path.parent)
     if root is None:
         log("=" * 66)
-        log("BDD Customer Intelligence · 客户档案归档（V1.1.4）")
+        log("BDD Customer Intelligence · 客户档案归档（V1.1.5）")
         log("=" * 66)
         log(f"[FAIL] {root_src}")
         log("STATUS             : FAIL（未写入任何文件）")
@@ -553,7 +596,7 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
         else match_customer(company, domains, entries)
 
     log("=" * 66)
-    log("BDD Customer Intelligence · 客户档案归档（V1.1.4）")
+    log("BDD Customer Intelligence · 客户档案归档（V1.1.5）")
     log("=" * 66)
     log(f"输入报告           : {md_path.name}")
     log(f"客户（登记全称）   : {company}")
@@ -563,6 +606,8 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
     log(f"归档根目录         : {root}")
     log(f"归档根来源         : {root_src}")
     log(f"匹配方式           : {matched_by}" + (f" —— {note}" if note else ""))
+    log(f"源文件处理         : " + ("保留（--keep-source）" if keep_source
+                                    else "归档成功后清理（档案库为唯一存放地）"))
 
     if hit is None:
         wanted = normalize_folder_name(company)
@@ -598,6 +643,19 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
             log(f"内容去重           : 报告已归档（{dup.get('file')}），跳过，不重复入库")
         if dry_run:
             log("DRY-RUN            : 未写入任何文件")
+        else:
+            # V1.1.5：源文件清理 —— 仅当档案库副本**逐字节一致**时才删
+            twins = [(md_path, folder / (dup.get("file") or ""))]
+            if pdf_name:
+                twins.append((pdf_path, folder / pdf_name))
+            for src, twin in twins:
+                if not src.is_file():
+                    continue
+                if not twin.is_file() or sha256_file(src) != sha256_file(twin):
+                    log(f"[WARN] 档案副本未通过一致性校验，保留源文件：{src.name}")
+                    continue
+                done, why = safe_cleanup_source(src, root, keep_source)
+                log(f"源文件处理         : {src.name} → {'已清理' if done else why}")
         log(f"档案保存位置       : {folder}")
         log("STATUS             : PASS（无新增文件）")
         return 0
@@ -626,6 +684,8 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
         return 0
 
     # ---- 写入（先建目录，再逐文件复制 + 校验）
+    #     注意：任何一条 return 4 都发生在清理之前 —— 归档没成功就一个源文件都不删
+    copied = []
     try:
         folder.mkdir(parents=True, exist_ok=True)
         for src, dst in ((md_path, md_dst), (pdf_path, pdf_dst)):
@@ -633,13 +693,17 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
                 continue
             if dst.exists():
                 log(f"[FAIL] 目标已存在，拒绝覆盖：{dst}")
+                log("       源文件未做任何改动。")
                 return 4
             shutil.copy2(src, dst)
             if sha256_file(src) != sha256_file(dst):
                 log(f"[FAIL] 复制后校验失败：{dst}")
+                log("       源文件未做任何改动。")
                 return 4
+            copied.append(src)
     except OSError as e:
         log(f"[FAIL] 归档写入失败：{e}")
+        log("       源文件未做任何改动。")
         return 4
 
     # ---- 更新客户标识文件
@@ -683,6 +747,16 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
     except OSError as e:
         log(f"[WARN] 客户标识文件写入失败（不影响报告归档）：{e}")
 
+    # ---- V1.1.5：归档成功 + 逐字节校验通过 → 清理源文件（档案库为唯一存放地）
+    cleaned, kept = 0, []
+    for src in copied:
+        done, why = safe_cleanup_source(src, root, keep_source)
+        if done:
+            cleaned += 1
+        else:
+            kept.append((src.name, why))
+        log(f"源文件处理         : {src.name} → {'已清理' if done else why}")
+
     # ---- 结果
     log("-" * 66)
     log("归档文件           :")
@@ -695,7 +769,11 @@ def archive(md_path: Path, pdf_path, cli_company, cli_domain, cli_date,
     if not pdf_ok:
         log("[WARN] 未找到配套 PDF，本次只归档了 Markdown。")
     log(f"历史 + 本次总计    : {len(entry['reports'])} 份报告")
-    log(f"客户档案目录       : {folder}")
+    log(f"源文件清理         : {cleaned} 个"
+        + ("（工作区根目录已无重复文件）" if cleaned and not kept else ""))
+    for nm, why in kept:
+        log(f"                     · {nm} 未清理：{why}")
+    log(f"交付位置           : {folder}" + ("（档案库为唯一存放地）" if cleaned and not keep_source else ""))
     log(f"档案保存位置       : {folder}")
     log("STATUS             : PASS")
     if new_folder:
@@ -746,6 +824,8 @@ def main():
     ap.add_argument("--date", help="报告日期 YYYY-MM-DD（默认取文件名 / 当天）")
     ap.add_argument("--time", help="同名冲突时的时间后缀 HHMM（默认当前时间）")
     ap.add_argument("--force-new", action="store_true", help="忽略既有档案，强制新建客户目录")
+    ap.add_argument("--keep-source", action="store_true",
+                    help="归档后保留源文件（退回 V1.1.4 行为；默认归档成功后清理源文件）")
     ap.add_argument("--list", action="store_true", help="列出档案库目录后退出")
     ap.add_argument("--dry-run", action="store_true", help="只演算不写文件")
     args = ap.parse_args()
@@ -771,6 +851,7 @@ def main():
         cli_root=args.archive_root,
         force_new=args.force_new,
         dry_run=args.dry_run,
+        keep_source=args.keep_source,
     )
 
 
