@@ -1,4 +1,4 @@
-# 客户情报卡输出模板（V1.1.3）
+# 客户情报卡输出模板（V1.1.4）
 
 ## 结构总览
 
@@ -36,7 +36,7 @@
 # {Company} · BDD Customer Intelligence
 
 {YYYY-MM-DD} | 来源：{输入形式：询盘原文 / 公司名 / 官网 / 名片}
-执行版本：BDD Customer Intelligence Skill V1.1.3
+执行版本：BDD Customer Intelligence Skill V1.1.4
 
 ## 第一层 · 主判断卡
 

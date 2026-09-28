@@ -11,7 +11,7 @@ description: |
 agent_created: true
 ---
 
-# BDD 客户情报与背调 · V1.1.3
+# BDD 客户情报与背调 · V1.1.4
 
 针对 BDD 电极 / 电化学氧化废水处理业务（Boromond / 波乐美）的客户情报工具。
 
@@ -92,6 +92,30 @@ agent_created: true
 >
 > 详见 `references/output-visual-rules.md` 第四部分与第六部分第 9 条。
 
+> **V1.1.4 Customer Archive Patch（2026-09-28，新增归档层 · 不触碰判断层）**：
+> ① **新增 `scripts/archive_report.py`（归档层）** —— 背调完成后把 `.md` + `.pdf` **复制**一份到本机客户档案库
+> `customer-archive/<规范化公司名称>/`，逐步沉淀可长期复用的 BDD 客户档案；
+> **归档根解析顺序固定**：`--archive-root` → **环境变量 `BDD_ARCHIVE_ROOT`** → **当前工作区根下的 `customer-archive/`**
+> （工作区根 = 从 cwd / 报告目录向上找到的第一个含 `.workbuddy/` 或 `.git/` 的目录，跳过用户主目录）；
+> **归档根绝不允许落在 Skill 源码目录内**（命中即拒绝，exit 6）—— 档案只在本机，不随源码入库；
+> ② **客户识别优先级**：**官网域名 → 公司名核心词全等 → 登记别名 → 名称核心词前缀**
+> —— 最后一条专治「首次用全称建档、后续用缩写再查」导致的重复建档；
+> **必须是整体前缀**（`Acme` ⊂ `Acme Waste Water Treatment`），
+> **仅共享首词一律不合并**（如 `Acme Green Water Ltd` ≠ `Acme Water Solutions Pte Ltd`），只输出人工确认提示；
+> ③ **同名冲突永不覆盖**：`{原名}_{YYYY-MM-DD}.md` → 已存在则 `_HHMM` → 再冲突则 `_HHMM_v2` / `_v3` 递增，历史报告全部保留；
+> ④ **同内容幂等**：以报告 sha256 去重，同一份报告重复归档不产生冗余文件；
+> ⑤ **每个客户目录内维护 `_customer.json`（保留）** —— 客户标识 + 报告清单（客户名 / 别名 / 域名 / 报告清单）；
+> **是目录标识文件，不是数据库、不是 CRM、不是业务模块**；丢失 / 损坏时脚本可从目录内既有报告自动重建；
+> ⑥ **只复制、不移动、不删除、不覆盖、不联网**；归档前后报告逐字节一致（脚本内 sha256 自校验）；
+> ⑦ **归档产物不进交付清单** —— 交付仍只有 `.md` + `.pdf` 两个文件，归档是**本机留档动作**，
+> 且必须向用户报出**档案保存位置**。
+>
+> **本 Patch 不修改任何判断与呈现**：13 个 Internal Key、`Partner / End-user` 规则、Evidence Policy、
+> Financial Warning 白名单、`Demand Status`、`Priority Site`、`Sales Conclusion`、
+> 三页 PDF 版式、`render_pdf.py` 全部**原样未动**；
+> **不新增字段 / 不新增评分 / 不新增 Skill / 不新增数据库与 CRM 界面**。
+> 注：`references/` 各文件内的版本标注沿用其**规则所属版本**（V1.1.3 及更早），本 Patch 未改动其中任何规则。
+
 ---
 
 ## 零、Default Invocation Protocol（默认调用协议 · V1.1.3 新增）
@@ -112,7 +136,7 @@ agent_created: true
 | 项 | 默认 |
 |---|---|
 | 执行范围 | **完整 14 步工作流**（公司核实 → 证据收集 → … → 销售结论 → 证据附录） |
-| 输出形态 | **最终只交付两个文件**：`{Company}_BDD_Intelligence_{YYYY-MM-DD}.md` + 同名 `.pdf`，存工作区根目录 |
+| 输出形态 | **最终只交付两个文件**：`{Company}_BDD_Intelligence_{YYYY-MM-DD}.md` + 同名 `.pdf`，存工作区根目录；**随后自动归档**到 `customer-archive/<规范化公司名称>/`（V1.1.4），并报出档案保存位置 |
 | 交付边界 | **渲染中间产物不进交付** —— HTML / Page PNG / 截图 / comparison 目录 / debug 输出 / 临时提取文件仅作内部渲染与回归用，**任务结束后不列入用户产物**（详见下节） |
 | 版本号 | 自动使用**当前版本**，无需用户声明 |
 | 13 个 Internal Key | 自动按模板逐字段输出，**无需用户逐字段列出** |
@@ -631,12 +655,13 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 **`FW = Yes` 不是一票否决，也不机械降档** —— 必须先过第 4b 步四问（严重程度 / 主体层级 / 采购与付款能力 / 项目执行能力），并在原因中解释。
 **`Business Change Signal` 不参与档位判定。**
 
-### 第 14 步 · Evidence Appendix + 输出
+### 第 14 步 · Evidence Appendix + 输出 + 归档
 
 按 `assets/output-card-template.md` 输出两层结构，并按 `references/output-visual-rules.md`：
 
 1. 生成 `{Company}_BDD_Intelligence_{YYYY-MM-DD}.md`
 2. 调用 `scripts/render_pdf.py` 生成同名 `.pdf`
+3. **调用 `scripts/archive_report.py` 归档到客户档案库（V1.1.4）** —— 见下
 
 **PDF 为业务员版（三页），仅做格式转换，不得反向影响任何判断。**
 
@@ -647,6 +672,37 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 | Page 3 | `KEY EVIDENCE ｜关键依据` —— 6~8 条，每条仅 **主题 / 简洁事实 / Source** |
 
 > 审计与边界信息（可溯源率 / 类型定义 / 实体排除 / 来源冲突 / 边界声明）**不进业务 PDF**，只保留在 Markdown 附录 B。
+
+#### 第 14 步之三 · 客户档案归档（V1.1.4）
+
+**背调收尾的固定动作：把这两个文件复制进本机客户档案库。**
+
+```bash
+python scripts/archive_report.py "{Company}_BDD_Intelligence_{YYYY-MM-DD}.md"
+```
+
+| 项 | 规则 |
+|---|---|
+| 归档根 | 解析顺序**固定**：① `--archive-root` → ② **环境变量 `BDD_ARCHIVE_ROOT`**（推荐，一次设定永久生效）→ ③ **当前工作区根**下的 `customer-archive/`（工作区根 = 从 cwd / 报告目录向上找到的第一个含 `.workbuddy/` 或 `.git/` 的目录；跳过用户主目录） |
+| 归档根禁区 | **绝不允许落在 Skill 源码目录内** —— 命中即拒绝并退出（exit 6），防止客户档案被误随 Skill 源码提交 / 推送 |
+| 客户目录 | `customer-archive/<规范化公司名称>/` —— 只做非法字符清洗、空白折叠与 Windows 保留字规避，**不改词、不删词**；目录名已被占用时自动唯一化（` (2)`），**绝不写进既有客户目录** |
+| 客户识别 | ① **官网域名**（最强）→ ② 公司名核心词全等 → ③ 登记别名 → ④ 名称核心词**前缀**（解决缩写重复建档；仅共享首词不合并，只出 HINT） |
+| 域名来源 | 优先 `--domain` 显式指定；否则从报告内引用 URL 自动推断（剔除社交 / 媒体 / 工商查询 / 监管站）并标注 `auto` |
+| 同名冲突 | `_HHMM` → `_HHMM_v2` / `_v3` 递增，**永不覆盖** |
+| 同内容 | sha256 去重，重复归档不产生冗余文件（幂等） |
+| 客户标识 | 目录内 `_customer.json`（客户名 / 别名 / 域名 / 报告清单）—— 丢失可自动重建 |
+| **输出要求** | **必须向用户报出「档案保存位置」**（完整路径）+ 本次是新建还是复用既有档案 |
+
+**硬规则**
+
+1. **只复制，不移动、不删除。** 报告原件留在工作区根目录，归档是**副本留档**。
+2. **永不覆盖。** 目标同名一律改期后缀，历史报告一份不许丢。
+3. **归档不参与判断。** 归档失败**不影响**报告交付；失败时报错并继续，不得因此重判任何字段。
+4. **客户识别不确定时不猜。** 脚本输出 `[HINT]` / `[WARN]`（共享首词但非前缀、目录名被占用、多档案前缀相近）时，**必须在回复里提示用户确认**；必要时用 `--force-new` 或人工改名。**不得**用别名强行合并两个不同主体。
+5. **报出位置。** 归档完成后必须告知「档案保存位置」与历史报告份数。
+6. **不进交付清单。** 交付物仍只有 `.md` + `.pdf` 两个文件；`customer-archive/` 属本机留档，不列为交付产物、不上传、不提交 Git。
+7. **单客户多厂区 / 多主体**（如集团与子公司分属不同主体）按**独立客户目录**处理，**不得**用别名强行合并。
+
 
 ---
 
@@ -686,6 +742,8 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 | 30 | **最终交付只有 `.md` + `.pdf` 两个文件**；HTML、Page PNG、截图、comparison 目录、debug 输出、临时提取文件**仅作内部渲染与回归测试的中间产物**，不得作为交付展示、不得列入用户产物 —— **仅当用户明确要求视觉检查 / PDF 回归 / Before-After 对比时**才输出图片类产物 | 交付纪律（不改内容与判断） |
 | 31 | **Partner 判 `High` 必须 `Partner Cooperation Evidence ∈ {Confirmed, Supported}`；`Unverified` / `Conflict`（无开放证据）一律不得 `High`；`Supported` + Conflict 通常最高 `Medium`** | 能力 / 场景 ≠ 合作机会 |
 | 32 | **`Conflict` 出现时，若「第三方集成机制」与「外部核心组件采购证据」均为 `Unknown`，不得因技术重叠或项目能力强而判 Partner `High`** | Conflict 不是装饰性标签 |
+| 33 | **客户档案归档只允许「复制」** —— 不移动、不删除、不覆盖；目标同名一律加 `_HHMM` / `_v2` 后缀；历史报告一份不许丢 | 档案不可逆损失 |
+| 34 | **归档不参与判断** —— 归档失败不得影响报告交付，不得因此重判任何字段；归档产物**不进交付清单**，交付仍只有 `.md` + `.pdf` 两个文件，且必须向用户报出**档案保存位置** | 归档层与判断层隔离 |
 
 ---
 
@@ -788,11 +846,11 @@ Demand Status 明细          Public Wastewater Evidence: … / Customer-stated 
 
 ---
 
-## 十二、文件说明（V1.1.3 + BDD-Specific Relevance Gate Patch）
+## 十二、文件说明（V1.1.4 + Customer Archive Patch）
 
 ```
 SKILL.md                                   本文件：默认调用协议 + 职责边界 + 决策链 + 概念区分 + 分流
-                                           + BDD Relevance 规则 + 证据政策（含 Financial Warning 白名单 + Business Change Signal） + 工作流 14 步 + 32 条硬性约束
+                                           + BDD Relevance 规则 + 证据政策（含 Financial Warning 白名单 + Business Change Signal） + 工作流 14 步（第 14 步含客户档案归档） + 34 条硬性约束
 references/
   evidence-policy.md                       证据政策：三类型 + UNKNOWN 三态 + Demand Status（PWE/CSD）
                                            + Commercial Risk（唯一定级来源）
@@ -816,9 +874,28 @@ assets/
   output-card-template.md                  两层输出模板（主卡 13 字段 + 附录 A 含主题/Decision Impact + 附录 B 审计信息）
 scripts/
   render_pdf.py                            MD → HTML → PDF（纯格式转换，无判断逻辑）
+  archive_report.py                        **客户档案归档（V1.1.4）**：报告 .md/.pdf → `customer-archive/<公司名>/`
+                                           （复制留档 · 域名/公司名/别名/核心词四级识别 · 同名永不覆盖 · sha256 幂等）
 ```
 
-**共 15 个文件**（V1 为 10 个，V1.1 新增 5 个）。
+**共 16 个文件**（V1 为 10 个，V1.1 新增 5 个，V1.1.4 新增 1 个）。
+
+**本机档案库（不在 Skill 包内、不入库）**
+
+```
+customer-archive/                          客户档案库根 —— 由 $BDD_ARCHIVE_ROOT 指定；
+                                           未设则该环境变量时回退到「当前工作区根」下的 customer-archive/
+  <规范化公司名称>/                         一个客户一个目录
+    _customer.json                         客户标识 + 报告清单（保留；可自动重建，非数据库）
+    {Company}_BDD_Intelligence_{日期}.md    历史报告，逐份保留
+    {Company}_BDD_Intelligence_{日期}.pdf
+```
+
+**部署约定**：档案库位置由 **`BDD_ARCHIVE_ROOT` 环境变量**指定（部署方按本机实际目录设定，形如 `<工作区目录>\customer-archive`）。
+路径来源**只依赖环境变量与工作区结构判断**，**不写入文档、不依赖任何对话记忆**。
+
+> `customer-archive/` 已写入 `.gitignore`（Skill 仓库 + 工作区），**客户档案只保存在本机，不随 Skill 源码 Push 到 GitHub**；
+> 归档脚本另有硬门禁：归档根若落在 Skill 源码目录内直接拒绝执行（exit 6）。
 
 ---
 

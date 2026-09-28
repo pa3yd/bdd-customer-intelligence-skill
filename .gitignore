@@ -36,6 +36,15 @@ desktop.ini
 _tmp/
 .tmp/
 
+# ---- 客户档案库（V1.1.4）----
+# 客户档案只保存在本机，**不得随 Skill 源码 Push 到 GitHub**。
+# 任何位置出现的 customer-archive/ 一律排除。
+customer-archive/
+**/customer-archive/
+_customer.json
+*_BDD_Intelligence_*.md
+*_BDD_Intelligence_*.pdf
+
 # ---- 安全兜底：密钥与凭据一律不入库 ----
 .env
 .env.*

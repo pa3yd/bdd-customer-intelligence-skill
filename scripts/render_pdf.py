@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-render_pdf.py — BDD Customer Intelligence Skill V1.1.3 渲染层
+render_pdf.py — BDD Customer Intelligence Skill V1.1.4 渲染层
 
 职责：Markdown → HTML → PDF（业务员版三页）
 ============================================================
@@ -42,6 +42,11 @@ render_pdf.py — BDD Customer Intelligence Skill V1.1.3 渲染层
     · Markdown 附录 A 的完整 Evidence **一字不删**（含 FACT/INFERENCE/UNKNOWN/Confidence/
       Decision Impact/Source）
   渲染层仍**只做版式转换与字段搬运**，不新增、不推断、不改写、不润色任何内容。
+
+【V1.1.4 Customer Archive Patch】
+  本 Patch **未修改渲染层任何逻辑**：客户档案归档由独立脚本 `scripts/archive_report.py` 承担，
+  不并入本脚本（保持「渲染层只做格式转换」的隔离声明）。
+  三页版式、颜色映射表、字段搬运规则与 V1.1.3 **完全一致**。
 
   渲染前必须通过**主卡 13 字段完整性校验**；缺任一字段 → 报错退出，不生成 PDF。
 
