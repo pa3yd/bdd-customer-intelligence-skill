@@ -104,6 +104,10 @@ BLOCK_DOMAINS = {
     "un.org", "worldbank.org", "unep.org", "who.int", "imf.org",
     "ec.europa.eu", "eea.europa.eu", "epa.gov", "osha.gov", "usgs.gov",
     "w3.org", "schema.org", "example.com",
+    # 展会 / 贸易目录站：它们**托管多家公司的档案页**，一旦被当作客户身份键，
+    # 会把同页出现的两家不同公司误判为同一客户 —— 必须排除。
+    "globalwaterexpo.me", "globalwaterexpo.com", "10times.com",
+    "expocheck.com", "eventseye.com", "tradefairdates.com",
 }
 
 # 监管 / 教育类域名后缀（正则，命中即排除）
