@@ -11,13 +11,17 @@ description: |
 agent_created: true
 ---
 
-# BDD 客户情报与背调 · V1.1.5
+# BDD 客户情报与背调 · V1.2.1
 
 针对 BDD 电极 / 电化学氧化废水处理业务（Boromond / 波乐美）的客户情报工具。
 
 **唯一职责：对潜在客户进行完整企业背调，输出客户开发判断依据。**
 
 **产出不是一份漂亮的背调报告，而是一页情报卡：这家公司是什么、机会在哪、值不值得投入、缺什么、该找谁、下一步做什么。**
+
+> **V1.2.0 · 证据边界修订（2026-10-10）**：① Partner 的销售/订单与**外部 BDD 相关需求**分开；② 母公司证据不得直接抬高子公司机会或需求；③ `Conflict` 在审计层区分直接竞争、工程重叠和部件采购切面；④ `Financial Warning` 的 `No/Unknown` 按检索覆盖与主体层级统一。具体规则以 `references/evidence-policy.md` 第四、六节、`references/bdd-relevance-rules.md` 第五节、`references/sales-conclusion-rules.md` 第 1b 步为准。13 个主卡字段、五值结论和 PDF 三页结构保持不变；历史档案不自动改判。
+> **出卡回归**：边界例见 `references/v12-calibration-cases.md`；必须重核当次证据，不能按公司名套档位。
+> **V1.2.1 · 业务员首屏优化（2026-10-12，仅展示层）**：PDF 第一页改为「决策 / 行动优先」—— Sales Conclusion 原结论卡置顶，紧接 Next Action，随后 Who to Contact 与 What Is Missing；其后为 `01 WHO` / `02 WHY` / `03 WHERE` 三组事实。**13 个 Internal Key 全部保留且每项只显示一次**（12 个字段行 + 1 张结论卡）；主卡表格保留「字段 / 判定」表头行。字段含义、判定值、颜色映射、Page 2 / Page 3 结构、Markdown 输出与归档规则**一律不变**。渲染层只搬运 Markdown 已有字段，不生成新内容、不新增分数或优先等级。详见 `references/output-visual-rules.md` 第九部分。
 
 > **V1.1 相对 V1 的四处升级**（详见第十一节）：
 > ① **客户分流**：新增 End-user Path / Partner Path —— 渠道与工程型客户不再按"自身废水"评判；
@@ -133,6 +137,41 @@ agent_created: true
 > 改动任一份都会造成静默漂移，且每完成一家客户就向根目录堆积 2 个文件。
 > 这与「同一 Skill 存在两份副本会漂移」是同一类缺陷。
 
+> **V1.1.6 Contact / Next Action Usability Patch（2026-09-29，仅改写法与字段内部结构 · 不触碰判断层）**：
+> ① **`关键联系人` 改为「主体（法人 / 业务主体）→（职能单位 →）目标岗位」** ——
+> **职能单位必须有公开来源**；无来源时**退化为「主体 → 岗位」，不得为凑齐三段而推测部门名称**；
+> 主体一律按**法人口径**（品牌 ≠ 登记主体时写实际经营主体）。
+> ② **`关键联系人` 在 `No verified contact found` 时不得停住** —— 必须附「**建议检索路径**」（固定六项，见 `references/contact-role-map.md` 第三节情况 C），
+> **只回答"下一步去哪里找这个角色"，不生成人名 / 邮箱 / 电话、不推断邮箱格式、不采信第三方聚合站数据**；
+> **该「建议检索路径」不属于证据来源白名单**（白名单仅约束"展示真人"），不得据路径推断任何人名。
+> ③ **新增「部分具名联系人」规则**（`references/contact-role-map.md` 第三节情况 B′）——
+> 公开来源存在具名、但该具名**不是当前 Primary Contact 岗位**时：**可以**展示该具名及来源（标为 Known / Escalation / Secondary），
+> **但不得把 Primary Contact 标记为「已找到」**，Primary Contact **仍须**输出目标角色 ＋ `No verified contact found`；
+> **不得因为存在一个公开姓名就推断其能负责当前技术项目**。**不新增 Internal Key。**
+> ④ **`下一步` 接入 `must-ask-params.md` 第六节的类型加问项**（**唯一来源，只引用不另立清单**）——
+> 主卡只留最关键 1 项，完整清单进 Page 2；`类型 → 组` 映射见 `references/sales-conclusion-rules.md` 三之二。
+> ⑤ **`Conflict = Yes` 时 `Next Action` 必须以「先确认合作 / 竞争边界，再进入技术讨论」开头**，并列明本阶段不主动释放范围——
+> **禁止范围逐项复用现有规则定义（硬规则 17 / `current-treatment-rules.md` / `evidence-policy.md`），不新造禁止项、不新造 `Conflict` 判断标准**。
+> ⑥ **新增「Page 2 明细写法纪律」**（`assets/output-card-template.md`）——
+> Page 2 显示字段**完整原文**，明细过长会把 Page 2 挤成两页（共 4 页）；此时**压缩 Page 1 摘要无效**（实测三种改法全部失败）。
+> 写法：**依据用 `E#` 引用不展开 · 加问项紧凑排版 · 检索路径一行平铺**；**不得删除任何信息点**。
+> **篇幅预算（当前模板经验预算 · 非绝对物理上限）**：Page 2 明细合计（12 字段 `⟪P2⟫` 之后字符数之和）——
+> **≤ 3,800 字符：正常**；**3,801 – 4,000 字符：警戒区，必须执行 PDF 渲染检查**；**> 4,000 字符：高溢出风险，优先紧凑化处理**。
+> 实测依据：4,012 字符 → 3 页（通过）、4,862 字符 → 4 页（溢出）；**是否溢出最终以实际 PDF 渲染结果为准**。
+> ⑦ **明确不做**：`Next Action` 不扩展为开发信 / 话术 / 跟进节奏 / 时间节点 / 联系人评分 / SDR 流程。
+>
+> **本 Patch 不修改任何判断逻辑**：13 个 Internal Key、`Customer Type / Path`、`Industry Fit`、`BDD Opportunity`、
+> `Partner Cooperation Evidence Gate`、`Demand Status`、`Commercial Risk`、`Financial Warning`、`Business Change Signal`、
+> `Current Treatment`、`Priority Site`、`Sales Conclusion`、`Contact Strategy Matrix`、三页 PDF 结构、`render_pdf.py`
+> **全部原样未动**；**不新增字段 / 不新增评分 / 不新增 Skill / 不新增联系人自动搜索**。
+> 注：`references/` 各文件内的既有规则条款内容未改，仅在 `contact-role-map.md` 与 `sales-conclusion-rules.md` 中**新增**本 Patch 对应条款。
+
+> **历史已知缺口（V1.2.1 状态）**：
+> ① **`Commercial Risk` 判据与背调场景不相容** —— `evidence-policy.md` 5.1 的危险信号**全部为「互动行为型」**，而「仅给网址」的背调必然无互动事实 → `Risk` 恒为 `Unknown`；
+> 由此纯公开背调的第 3 步（要求 `Risk ∈ {Low, Medium}`）通常不可达；`contact-role-map.md` 的矩阵也缺少互动输入。**本次不把「可核查度」冒充商业风险，不为增加档位而放宽第 3/4 步**；先用 V1.2.0 的需求与主体门槛复核新样本，再用真实互动记录校准该联动。
+> ② **Partner Gate 的 `Supported` 与 `Unverified` 封顶值相同**，导致"是否具备第三方集成机制"这一核心判据在档位上无差别（累计 5 例 `Medium`；`Confirmed + Conflict` 两路径已验证可落 `High`）。
+> ③ **`Next Action` 三段式**（信息动作 / 推进动作 / 本轮不做）暂缓，待观察 ①②③④ 的实际使用效果。
+
 ---
 
 ## 零、Default Invocation Protocol（默认调用协议 · V1.1.3 新增）
@@ -157,7 +196,7 @@ agent_created: true
 | 交付边界 | **渲染中间产物不进交付** —— HTML / Page PNG / 截图 / comparison 目录 / debug 输出 / 临时提取文件仅作内部渲染与回归用，**任务结束后不列入用户产物**（详见下节） |
 | 版本号 | 自动使用**当前版本**，无需用户声明 |
 | 13 个 Internal Key | 自动按模板逐字段输出，**无需用户逐字段列出** |
-| 预设禁令 | 自动执行：**不得预设** Customer Type / Industry Match / BDD Opportunity / Demand Status / Financial Warning / Business Change Signal / Commercial Risk / Priority Site / Sales Conclusion 中的任何结论 |
+| 预设禁令 | 自动执行：**不得预设** Customer Type / Industry Match / BDD Opportunity / Demand Status / Financial Warning / Business Change Signal / Commercial Risk / Priority Site / Sales Conclusion 中的任何结论；集团证据与目标主体证据先分层 |
 | 缺失信息 | 自动写 `Unknown`（含三态后缀），**不得编造、不得为凑齐字段而反问** |
 | 检索要求 | 自动执行证据检索优先级（处罚 / 许可 / 环评 / PWE / 招投标 / 厂区级 / 集团级） |
 
@@ -203,7 +242,7 @@ customer-archive/<规范化公司名称>/{Company}_BDD_Intelligence_{YYYY-MM-DD}
 ### 严格回归测试 Prompt 保留（不得删除）
 
 需要逐项核对规则时，用户仍可使用**显式规格句式**（重申版本号 + 禁止预设 + 逐字段要求 + 输出格式），
-例如：「严格按照当前 V1.1.3 规则执行。不提供额外人工判断，不预设 BDD Opportunity、Demand Status、Priority Site 或 Sales Conclusion。按标准格式输出 Markdown + PDF。」
+例如：「严格按照当前 V1.2.1 规则执行。不预设 BDD Opportunity、Demand Status、Priority Site 或 Sales Conclusion。按标准格式输出 Markdown + PDF。」
 
 **本协议不覆盖、不简化、不替代该用法** —— 显式规格仍然逐条生效。
 
@@ -311,10 +350,11 @@ Evidence Appendix               证据附录（呈现，非新判定）
 | 2 | **不得多模块分别调用 LLM 得出互相冲突的结论。** 整张卡由同一次推理产出。 |
 | 3 | **不得反向回推。** Next Action 不得倒过来影响上游任何字段。 |
 | 4 | **Evidence 前置采集、末尾呈现。** 物理上先产出证据（第 3 步），最后才作为附录展示。**"排在末尾"是输出顺序，不是判定顺序。** |
-| 5 | **不做任何自动串联推导。** 每个字段独立依据证据判定。唯一例外：`End-user Path` 中 `Demand Status` 取 `PWE` 与 `CSD` 两者较高者（属同一字段内部规则）。 |
+| 5 | **不做任何自动串联推导。** 每个字段独立依据证据判定。`Demand Status` 在 End-user 与 Partner 两条 Path 均先按 `evidence-policy.md` 的主体/需求对象门槛分别定 `PWE` 与 `CSD`，再取较高者；集团订单与一般产品目录不得自动升档。 |
 | 6 | **Path 优先。** Path 未定 → `BDD Relevance = Unknown`、`Opportunity Type = Unknown`、`Sales Conclusion = 信息不足，暂缓判断`。 |
 | 7 | **`Industry Fit` 与 `BDD-Specific Relevance Gate` 必须分别取证。** 前者用行业属性（T3 另需废水性质证据），后者用主体级废水性质与处理难点证据；**不得用一方证据顶替另一方**。 |
 | 8 | **Partner Path：能力证据与「合作机会」证据必须分别取证。** A~D 属能力 / 场景 / 项目证据；**E（`Partner Cooperation Evidence`）必须另有第三方集成 / 采购 / 合作机制证据**。**不得用 A~D 顶替 E。** |
+| 9 | **主体层级优先。** 集团/母公司事实只有在目标主体参与、执行或获明确授权的证据下才计入其合作机会与需求；同一交易不得跨主体重复计数。 |
 
 ---
 
@@ -327,7 +367,7 @@ Evidence Appendix               证据附录（呈现，非新判定）
 | **Industry Fit** | 这个**行业 / 业务属性**是否属 Boromond 目标市场？ | Target / Adjacent / Outside / Unknown | 只需行业属性 |
 | **BDD Relevance** | 这家公司 / 这个伙伴**是否存在 BDD 可切入的机会**？ | High / Medium / Low / Unknown | 8 项输入 + Path |
 | **Opportunity Type** | 这个机会**是什么类型**？ | End-user / Technology Partner / EPC·Integration / Distribution / Unknown | 由客户类型与能力推导 |
-| **Demand Status** | 是否存在实际项目 / 采购 / 治理需求**证据**？ | Confirmed / Strong Signal / Potential / Weak / Unknown | PWE + CSD 两类证据 |
+| **Demand Status** | 目标主体是否存在与 BDD 可切入场景相关的项目评估 / 外部采购 / 治理需求**证据**？ | Confirmed / Strong Signal / Potential / Weak / Unknown | PWE + CSD；Partner 对外销售仅作背景 |
 
 > Industry Fit 是**行业属性**，BDD Relevance 是**主体级机会判断**，Opportunity Type 是**机会分类**，Demand Status 是**需求事实**。四者证据来源不同，不能互相替代。
 
@@ -568,7 +608,7 @@ Opportunity Type  五值之一（复合时用 " +| " 连接）
 
 **硬规则**：
 - 查不到的字段**直接写 `Unknown`**，不得用"估计""约""大概"填充。
-- **集团级数据不得直接写成某厂区数据。**
+- **集团级数据不得直接写成目标子公司或某厂区数据。**
 
 ### 第 5 步 · Customer Type + Path 客户类型与路径
 
@@ -610,6 +650,8 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 - 若伙伴方自有工艺与 BDD 场景重叠 → **必须标注 `Conflict: 潜在竞争`**
 - **Partner 专用顺序（Partner Gate Patch 2026-09-27 起）**：条件 A（Industry Fit ∈ {Target, Adjacent}）→ B（能力确认）→ C（技术组合重叠）→ D（≥ 2 项渠道 / 项目证据）→ **E（`Partner Cooperation Evidence ∈ {Confirmed, Supported}`）** → **F（Conflict 控制）**；**A~F 全满足才可判 `High`**。
 - **`Partner Cooperation Evidence` = `Unverified` / `Conflict`（无开放证据）→ 不得 `High`**（通常 `Medium`）；`Supported` + `Conflict = Yes` → **通常最高 `Medium`**；`Confirmed` + `Conflict = Yes` → 按「BDD 域相关性 / 机制外部性」两维度重算 `High` 或 `Medium`
+- **V1.2.0 主体归属门槛**：A～F 分别记录证据所指的法律主体；母公司技术许可/订单不得直接计为子公司 `Confirmed` 或 `High`。化学品分销/代工不能单独证明外部 BDD 设备代理机制。
+- `Conflict` 在附录 B 分 `Direct competitor` / `Integration overlap` / `Component procurement`；同一主体可同时竞争和采购部件。直接竞争但未检索部件切面 → 先验证；已定向检索仍无正面切面 → 按销售结论第 1b 步暂不优先。
 - **Partner Path 不走 End-user 的 `BDD-Specific Relevance Gate`**（两者不得混用）
 - **`Conflict` 出现时判 `High` 前必须检查 5 项**：技术路线重叠层级 / 是否自研 proprietary / **是否有第三方集成机制** / **是否有外部核心组件采购证据** / Boromond 属 supplier·partner·competitor 哪一类 —— **第 3、4 项均为 `Unknown` 时不得判 `High`**
 - Gate 结果记入 **Markdown 附录 B（审计层）**，**不进业务 PDF、不新增字段**
@@ -629,6 +671,7 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 按 `references/evidence-policy.md` 第四节：
 
 - **`PWE` 与 `CSD` 分别定级**，主卡只输出较高者
+- **先过主体与需求对象门槛**：Partner 的通用订单、营业规模、目录与已交付项目只证明业务活动；没有相关外部技术需求或未覆盖的工艺位时 `Demand Status = Unknown`。母公司证据未覆盖目标子公司时只作 `Group-level context`。
 - **只能依据第 3 步的证据**——不依据行业好坏，不依据 BDD Relevance 高低，**也不依据最终是否成交**
 - 无询盘文字时，`CSD = UNKNOWN · not searched`（**这不影响 `PWE` 独立定级**）
 
@@ -640,6 +683,7 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 > 类型级先验（如"工程公司通常风险高"）**不参与定级**，只能作为 `Risk Note` 附注。
 
 **Financial Warning**（`Yes / No / Unknown`）按 `evidence-policy.md` 第六节：**只有财务困境证据**（资不抵债 / 破产 / 流动性危机 / 债务违约 / 持续经营重大疑虑 / 法院或债务层面财务重组 / 集团层面重大亏损且有明确财务压力 / 官方披露重大财务困难）才可判 `Yes`，必须附可靠公开 Source。
+`No` 只表示近期可靠的**目标主体级**检索覆盖下未见白名单警示；无财报/登记渠道、只查普通网页或只有集团资料时为 `Unknown`。两者都不构成财务健康评级。
 **裁员 / 重组 / 高管变化 / 厂区亏损 / 降本计划 → 一律不得触发 `Yes`。**
 **不得扩展为完整财务评级。** `FW = Yes` 也不得机械降档（见第 13 步）。
 
@@ -746,7 +790,7 @@ python scripts/archive_report.py "{Company}_BDD_Intelligence_{YYYY-MM-DD}.md"
 | 9 | **给 `High` 时 `Reason` 必须列 ≥ 2 项主体级证据编号** | 防行业经验值升格 |
 | 10 | **`Commercial Risk = Unknown` 不得写成 `High`** | 无事实 ≠ 有风险 |
 | 11 | FACT 必须有 Source；INFERENCE 必须有 Reason + Confidence；UNKNOWN 必须带三态后缀且不得补全 | 幻觉防线 |
-| 12 | **集团级数据不得写成厂区级数据** | 主体 / 层级错位 |
+| 12 | **集团级数据不得写成目标子公司或厂区级数据** | 主体 / 层级错位 |
 | 13 | 同名近似主体未排除前，不得计入 Demand Status 与 Commercial Risk | 误关联会翻转结论 |
 | 14 | Company Verification 名称有歧义时输出 `Unverified`，不得选最像的一家 | 主体错 = 全盘错 |
 | 15 | Company Profile 查不到字段**留 `Unknown`**，不得填"估计值" | 制造虚假完整度 |
@@ -769,6 +813,10 @@ python scripts/archive_report.py "{Company}_BDD_Intelligence_{YYYY-MM-DD}.md"
 | 32 | **`Conflict` 出现时，若「第三方集成机制」与「外部核心组件采购证据」均为 `Unknown`，不得因技术重叠或项目能力强而判 Partner `High`** | Conflict 不是装饰性标签 |
 | 33 | **归档即归宿（V1.1.5）** —— 归档成功**且逐字节 sha256 校验通过**后才清理源文件；归档失败 / 目标已存在 / 校验不一致 / 归档根被拒 / `--dry-run` / `--keep-source` → **一个源文件都不删**；**源文件本身位于档案库内也绝不删**；目标同名一律加 `_HHMM` / `_v2` 后缀，历史报告一份不许丢 | 消除重复副本造成的静默漂移，同时绝不丢件 |
 | 34 | **归档不参与判断** —— 归档失败不得影响报告交付，不得因此重判任何字段；交付物只有 `.md` + `.pdf` 两个文件（**位于档案库客户目录内**），且必须向用户报出**交付位置** | 归档层与判断层隔离 |
+| 35 | Partner 仅有通用订单/目录/对外销售时 `Demand Status = Unknown`；须先证明目标主体的相关外部技术或项目需求再升档 | 业务活动 ≠ BDD 需求 |
+| 36 | 母公司交易/许可不得代替子公司 A～F、`Demand Status` 或 `Financial Warning` 的主体级证据；同一交易只计一次 | 防集团证据重复升档 |
+| 37 | `Conflict` 须区分直接竞争、工程重叠和部件采购；竞争者有部件采购事实时不得自动否决 | 防误杀可供货切面 |
+| 38 | `FW = No` 须记近期可靠的目标主体级检索来源、时段；覆盖不足取 `Unknown` | 防「没查到」写成「无财务问题」 |
 
 ---
 
@@ -839,13 +887,41 @@ Demand Status 明细          Public Wastewater Evidence: … / Customer-stated 
 
 **附录 B · 审计信息（仅 Markdown，不进入业务 PDF）**
 
-固定附：可溯源率 · 类型定义 · Decision Impact 说明 · 集团级 vs 厂区级说明 · 同名主体排除 · 来源冲突项 · UNKNOWN 三态汇总。
+固定附：可溯源率 · 类型定义 · Decision Impact 说明 · 集团级 vs 目标主体/厂区级说明 · 同名主体排除 · 来源冲突项 · UNKNOWN 三态汇总。Partner 另记 A～F 证据的主体层级、需求证据与一般业务活动的界线；有 `Conflict` 时记子类及部件采购切面。
 
 **边界声明**（仅 Markdown）：不输出技术方案 / 设备选型 / 工艺参数 / 达标承诺 / 金额 / 报价状态；Technical Fit 与 Quotation Readiness 按范围冻结不输出；未输出"建议小试"、未固定"寄 5~10 L 水样"。
 
 > 渲染层以 `## 附录 B` / `## 边界声明` 为切分点：**其后的内容不进入 PDF**（内容仍完整保留在 Markdown）。
 
 详见 `assets/output-card-template.md` 与 `references/output-visual-rules.md`。
+
+### 交付展示与汇报（2026-10-13 **展示层精简** · 只改"展示什么 / 报什么"，不改任何交付物与判断）
+
+**默认可视交付只有 2 项**；其余一律**后台留存、不主动展示、不列入附件**：
+
+| 默认展示 | 条件 |
+|---|---|
+| ① **客户背调资料卡 PDF**（业务员版 3 页） | 始终 |
+| ② **英文开发信 MD**（`drafts/<公司>/<公司>_开发信_<日期>.md`） | **仅当符合 §十六 生成条件**（已归档 PASS 且结论 ∈ {`建议重点开发`, `建议开发`, `建议先验证`} 且 G1–G5 放行） |
+
+> **不符合邮件生成条件时**：**只展示 ①**，并**说明阻断原因**（结论为 `暂不优先` / `信息不足，暂缓判断` / `CONTACT_NONE` / 台账 `SENT` 或 `UNKNOWN_NEEDS_REVIEW` / 归档未 PASS）。
+
+**按需展示（仅当用户明确提出「要富通天下排版 / 复制 HTML / 准备发件」时）**：邮件 **HTML 排版版** 与 **纯文本版**。
+> ⚠️ **两者必须继续生成与保存，不得延迟** —— `bdd-sales-outreach/scripts/quality_check.py` 的**入口校验**（缺 `.html` 或 `.txt` 即 `[ERR]` 退出）与**第 7 项**（HTML / 纯文本词元一致性）**强依赖**它们。归档、台账、去重**不依赖**它们，但质检依赖 ⇒ **只隐藏展示**。
+
+**后台保留（正常保存，不作为交付附件展示）**：客户背调 **MD**（权威版，含附录 A 证据来源 / 附录 B 审计）· **Handoff JSON** · 开发信状态与去重**台账** · **质检日志** · **成本遥测记录** · `README` / `tools/telemetry.py` 等程序文件。
+
+**汇报只输出四段**（其余一律不写）：
+
+| 段 | 内容 | 要求 |
+|---|---|---|
+| ① **客户结论** | `Sales Conclusion` · `BDD Opportunity`（相关性）· 开发建议 | **各 1 句，尽量简短**；需要细节时由用户展开后台资料 |
+| ② **联系渠道** | 可验证邮箱 / 官方联系表单 | 只列已核实的官方渠道；无则写明 |
+| ③ **交付文件** | PDF ＋（如有）开发信 MD 的**档案库完整路径** | 须注明新建 / 复用既有档案 |
+| ④ **异常提示** | **仅在有异常时出现**：证据不足 / 质检 `MANUAL` 项 / 归档异常 / `[HINT]` `[WARN]` / 页数 ≠ 3 / 邮件阻断原因 | 有则逐条列，无则写「无」 |
+
+> **不因精简而省略**：交付位置（必报）· 归档异常（必报）· 机械核对失败项（必报）· 邮件阻断原因（必报）。
+> **不再重复**：脚本已输出的 CHECK 逐项、Evidence 明细、13 字段全文（这些都在交付文件里，无需在对话中复述）。
 
 ---
 
@@ -875,7 +951,7 @@ Demand Status 明细          Public Wastewater Evidence: … / Customer-stated 
 
 ```
 SKILL.md                                   本文件：默认调用协议 + 职责边界 + 决策链 + 概念区分 + 分流
-                                           + BDD Relevance 规则 + 证据政策（含 Financial Warning 白名单 + Business Change Signal） + 工作流 14 步（第 14 步含客户档案归档） + 34 条硬性约束
+                                           + BDD Relevance 规则 + 证据政策（含 Financial Warning 白名单 + Business Change Signal） + 工作流 14 步（第 14 步含客户档案归档） + 38 条硬性约束
 references/
   evidence-policy.md                       证据政策：三类型 + UNKNOWN 三态 + Demand Status（PWE/CSD）
                                            + Commercial Risk（唯一定级来源）
@@ -922,6 +998,22 @@ customer-archive/                          客户档案库根 —— 由 $BDD_AR
 - **交付物在档案库客户目录内**；工作区根目录**不再保留副本**（归档成功后清理）。
 - **可见自检信号**：任务结束时工作区根**不应**残留任何 `*_BDD_Intelligence_*` 文件 ——
   若仍在，说明归档未成功（此时源文件被完整保留，**未丢件**）。
+
+**机械核对单一来源（2026-10-13 成本优化 Patch 2 · 合并重复检查，不删检查项）**
+
+为避免同一次结论被核对两遍，机械性检查一律**以脚本一次输出为准**，调用方**不再另跑命令复核**：
+
+| 检查项 | 单一来源（脚本输出行） | 说明 |
+|---|---|---|
+| 主卡 13 字段完整性 | `render_pdf.py` → `主卡字段数 : 13 / 13` | **不要**再自己 `grep -c` 数 |
+| PDF 页数 = 3 | `render_pdf.py` → `CHECK_pages` | **已合并**原先另跑的 `pymupdf` 页数核对 |
+| PDF 生成成功 | `render_pdf.py` → `CHECK_pdf` | — |
+| 附录 Decision Impact 列 | `render_pdf.py` → `CHECK_evidence_col` | — |
+| 归档位置 / 份数 / sha256 | `archive_report.py` 输出 | 归档结论以它为准 |
+| 开发信质检 13 项 | `quality_check.py` 输出 | 归 outreach 侧 |
+
+> **保留原则**：上述**检查项一个都不删**，只把「脚本已算 + 人工再算」合并为「只算一次」。
+> 脚本输出为 `MANUAL` / `FAIL` 时，仍须按异常提示处置（不得因自动化而忽略）。
 
 **部署约定**：档案库位置由 **`BDD_ARCHIVE_ROOT` 环境变量**指定（部署方按本机实际目录设定，形如 `<工作区目录>\customer-archive`）。
 路径来源**只依赖环境变量与工作区结构判断**，**不写入文档、不依赖任何对话记忆**。
@@ -1008,6 +1100,58 @@ customer-archive/                          客户档案库根 —— 由 $BDD_AR
 |---|---|
 | BDD / 工业废水客户背调与开发判断 | **本 Skill** |
 | 体育用品 / 泳具等消费品外贸询盘 | `ai-inquiry-analysis` |
-| 回复邮件、话术生成 | 无（V1 已移出；如需，另建独立 Skill） |
+| 开发信生成（首触 / 跟进草稿） | **`bdd-sales-outreach`**（已建成 · 本 Skill 归档后自动衔接，见 §十六） |
 
 **不适用**：具体技术方案设计、设备选型计算、报价核价、工程参数输出、小试方案 → 属人工工程师职责。
+
+---
+
+## 十六、与 `bdd-sales-outreach` 的自动衔接（2026-10-12 · MVP-2）
+
+### ⛔ 硬性动作 —— 阶段 ② 是默认动作，不是可选项
+
+**本 Skill 的交付流程包含两个阶段：**
+
+| 阶段 | 动作 |
+|---|---|
+| **① 背调** | 出客户情报卡 → 渲染 PDF → **归档** |
+| **② 衔接（默认必须做）** | **归档 STATUS PASS 后，立即衔接 `bdd-sales-outreach` 生成首触开发信草稿** |
+
+> **不要等用户再说一次「生成开发信」。** 归档成功后按下列顺序执行：
+> ```bash
+> # 1) 准入判定（客户级 · 跨版本）
+> python "<skill_dir>\bdd-sales-outreach\scripts\outreach_log.py" --admit "<客户键>"
+> # 2) 放行则生成交接数据
+> python "<skill_dir>\bdd-sales-outreach\scripts\handoff_from_card.py" "<归档报告.md>"
+> # 3) 按 references/angle-library.md 撰写正文 → make_email.py → quality_check.py
+> # 4) 登记：outreach_log.py --add "<handoff.json>" --action-type first_touch --review-state <质检结论>
+> ```
+> **唯一例外**：用户明确说「只要背调 / 不要开发信」。
+
+**继续生成的条件（四个全满足）**
+1. 报告**已归档且 STATUS PASS**（未成功归档 ⇒ 不生成）
+2. 结论 ∈ {`建议重点开发`, `建议开发`, `建议先验证`}
+3. 客户卡至少有 **1 条主体级 FACT**
+4. 台账准入放行（`outreach_log.py --admit`）
+
+**一律不生成**：`暂不优先` / `信息不足，暂缓判断` / 无对口岗位（`CONTACT_NONE`）；
+以及台账状态为 `SENT`（**已发送，永久禁止重发首封**）、`DRAFT_OPEN`（已有草稿，改走 `draft_update`）、
+`UNKNOWN_NEEDS_REVIEW`（**发送状态无证据 ⇒ 必须人工核查，不得默认未发送**）。
+
+**边界**：本 Skill **只提供判断依据** —— 邮件撰写、质检、台账、发送准备全部由 `bdd-sales-outreach` 负责。
+本 Skill **不写**邮件内容、**不改** 13 个 Internal Key、**不改**归档与 PDF / MD 规则。
+归档完成后，本 Skill 的产物（客户卡 `.md`）**保持不变**，Outreach 只**读**不写。
+
+> ### 架构说明（事实陈述，不影响上面的执行指令）
+>
+> 本节是**指令层衔接**：`archive_report.py` **零改动**，没有 hook / 监听 / 回调，因此**不是操作系统级的事件驱动**。
+> 阶段 ② 由遵循本节指令的调用方在归档成功后执行，命令已在上方给出。
+>
+> **兜底（若某次背调未执行阶段 ②）**：
+> ```bash
+> python "<skill_dir>\bdd-sales-outreach\scripts\outreach_scan.py" --json-out "<log>\queue.json"
+> python "<skill_dir>\bdd-sales-outreach\scripts\outreach_worker.py" --customer "<客户键>"
+> ```
+> `outreach_scan.py` 输出「**已归档但未生成开发信**」的待办队列（含阻断原因与人工处置命令），幂等、按 sha256 缓存结论；
+> `outreach_worker.py` 单客户执行器完成「生成 → 质检 → 更新状态」，任务可恢复、重复执行不重复创建首草。
+> 已配置**每周一定时扫描**（automation「BDD 开发信待办扫描（每周）」）作为兜底。
