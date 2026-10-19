@@ -33,6 +33,8 @@ Path                    End-user / Partner / Undetermined
 Missing Critical Information  是否为空
 ```
 
+**V1.2 前置核对**：`Demand Status` 必须先通过 `evidence-policy.md` 第四节的目标主体/需求对象门槛。集团订单、Partner 对外销售和通用目录不能直接抬高需求。Partner 有 `Conflict` 时读取 `bdd-relevance-rules.md` 5.1 的子类与非竞争切面证据；这属于现有 `BDD Relevance / Conflict` 的解释，不新增评分或主卡字段。
+
 > **`Business Change Signal` 不是判定输入。** 它只用于解释企业当前经营变化，
 > **不得参与任何档位判定**（见 `evidence-policy.md` 第七节硬规则 1~8）。
 > 裁员、高管变化、组织架构调整、厂区亏损、降本计划 → 一律只进 Business Change Signal。
@@ -55,6 +57,12 @@ Missing Critical Information  是否为空
 >
 > **`Business Change Signal = Yes` 既不一票否决，也不降档。**
 
+### 第 1b 步 · 已确证直接竞争的优先级
+
+仅当**目标主体**自有/独占同工位氧化产品、对外商业化及场景重叠均有 E# 支撑，且已定向检索外部核心部件采购、授权或其他非竞争合作切面后仍**没有正面证据**时，取 `暂不优先`。原因写成「当前无已证实的可进入切面，优先级低」，**不得写成机会为零、绝不会采购**。未检索这些切面时先取 `建议先验证`，并在 `Next Action` 指明要核的切面。
+
+存在该主体**已证实的外部电极/反应器等部件采购**时，记录「系统级竞争 + 部件级潜在供应」并继续第 2～5 步；不能自动否决，也不能因采购行为自动升 `High`。通用 AOP 工程设计只属 `Integration overlap`，不触发本步。
+
 ### 第 2 步 · `信息不足，暂缓判断`
 
 | 条件 |
@@ -76,6 +84,11 @@ Missing Critical Information  是否为空
 | 4 | `Financial Warning ≠ Yes` |
 | 5 | `Missing Critical Information` 不含 Business 级缺项 |
 
+> **说明（2026-10-16 · 未放开门槛）**：`Commercial Risk` 现已新增「公开可验证风险信号」路径（见 `evidence-policy.md` 5.6 / 5.7），
+> 纯公开背调下 `Risk` **可以**通过"按允许渠道检索 + 无公开负面"拿到**可核查的 `Low`**（不再必然恒 `Unknown`）。
+> 但**本步条件 3 的 `Risk ∈ {Low, Medium}` 门槛保持原样、未放宽** —— 拿 `Low` 的前提仍是"有可靠主体级覆盖且无负面"，
+> 非上市 / 无公开财报渠道的主体仍为 `Unknown`，不满足本步。是否进一步调整门槛属后续独立决策，本 Patch 不动。
+
 ### 第 4 步 · `建议开发`
 
 **满足任一**：
@@ -84,6 +97,10 @@ Missing Critical Information  是否为空
 |---|---|
 | A | `BDD Relevance = High` **且** `Demand Status = Potential` **且** `Risk ≠ High` **且** `FW ≠ Yes` |
 | B | `BDD Relevance = Medium` **且** `Demand Status ∈ {Confirmed, Strong Signal}` **且** `Risk ∈ {Low, Medium}` **且** `FW ≠ Yes` |
+
+> **说明（2026-10-16 · 未放开门槛）**：A 项 `Risk ≠ High` 本已允许 `Unknown`（`Unknown` ≠ `High`，故 A 项在纯背调下**本就可达**）；
+> B 项的 `Risk ∈ {Low, Medium}` 现因「公开可验证风险信号」路径（`evidence-policy.md` 5.6 / 5.7）而**具备拿 `Low` 的可能**，
+> 但**门槛未放宽** —— 拿 `Low` 仍需"可靠主体级覆盖 + 无负面"。本 Patch 不联动第 3 步的结论门槛。
 
 > 表中 `FW ≠ Yes` 的含义是 **"不存在财务困境"**。
 > 若 `FW = Yes`，先走 **第 4b 步**判定是否影响本次采购与执行，再决定是否适用 A / B。
@@ -126,20 +143,64 @@ Missing Critical Information  是否为空
 
 ---
 
+## 三之二、Next Action 生成要求（**V1.1.6 新增 · 对全部档位生效**）
+
+`Next Action` 只回答一件事：**「这家企业下一步最需要确认什么」。**
+
+**必须包含两段内容：**
+
+| 段 | 内容 | 来源（**单一来源，不得另立**） |
+|---|---|---|
+| **① 首轮加问** | 按客户类型取该类型的**加问项**：主卡只留**最关键 1 项**，完整清单进 Page 2 明细 | **`references/must-ask-params.md` 第六节**（A / B / C / D / E 组）—— **本文件不复写、不新造问题清单**，只引用 |
+| **② 边界提示** | 当 `Conflict = Yes` 时，**`Next Action` 必须以该提示开头**：「先确认合作 / 竞争边界，再进入技术讨论。」 | `Conflict` 的定义与判定见 `references/bdd-relevance-rules.md` 5.1 / 5.4 与 `references/opportunity-type-rules.md` 第三节 —— **不在本文件重定义** |
+
+**类型 → 加问组映射（复用 `must-ask-params.md` 第六节已有分组，不新增问题）**
+
+| Path / 客户类型 | 加问组 |
+|---|---|
+| End-user | **B 组** |
+| Partner·EPC | **C 组** |
+| Partner·Distributor | **D 组** |
+| Partner·Technology Partner | **E 组** |
+| Partner·Integrator | **C 组 + E 组**（项目与采购形态 + 组合缺口；**沿用已有条目，不新增问题**） |
+| Undetermined | **A 组（通用）** |
+
+**`Conflict = Yes` 时 · 本阶段不主动释放（禁止范围一律复用现有规则的定义，不新增禁止项）**
+
+| 不释放 | 依据（**现有规则**） |
+|---|---|
+| 核心技术参数 | `SKILL.md` 硬规则 17（不输出工艺参数） |
+| 完整方案设计 | `SKILL.md` 硬规则 17（不做设备选型、不出技术方案） |
+| 敏感工艺细节 | `SKILL.md` 硬规则 17 ＋ `references/current-treatment-rules.md`（只写单元名，禁止数值区间） |
+| 非公开项目资料 | `references/evidence-policy.md`（FACT 必须有 Source；不得引用非公开来源） |
+
+**明确不做**：不写开发信 · 不写话术 · 不写跟进节奏与时间节点 · 不做联系人评分 · 不进入 SDR 流程。
+（以上均属 V1 Freeze 归档区与执行层职责，见 `SKILL.md` 第十三节。）
+
+**Page 2 明细写法**：遵循 `assets/output-card-template.md` 的「**Page 2 明细写法纪律**」——
+依据用 `E#` 引用不展开、加问项紧凑排版、检索路径一行平铺；**不得删除任何信息点**。
+（原因：Page 2 显示字段完整原文，明细过长会把 Page 2 挤成两页 → 共 4 页。）
+
+---
+
 ## 四、硬规则
 
 | # | 规则 |
 |---|---|
 | 1 | **不得引入数值评分。** 无 100 分制、无权重求和、无 AI 打分。判定为**逐级规则匹配**，规则可完整打印、可人工复核。 |
 | 2 | **保守优先。** 规则冲突时取更保守的一档（把 C 误判为 A 的代价远大于漏掉一个 A）。 |
-| 3 | **`Unknown` 不得被当作负面信号。** `Risk = Unknown` 不导致 `暂不优先`，最多导致 `建议先验证`。 |
+| 3 | **`Unknown` 不得被当作负面信号。** `Risk = Unknown` 本身不导致 `暂不优先`，也不能冒充 `Low`；按第 3/4/5 步的明示条件落档。 |
+| 3a | 第 1b 步是**直接竞争的资源优先级**判定，不把 `Risk = Unknown` 改成 `High`，也不把未发现采购证据写成「无采购可能」。 |
 | 4 | **一票否决优先于所有加分项。** 风险高不因需求强而降档。 |
-| 5 | 结论必须与 `Next Action` 一致。`建议先验证` → Next Action 必须是"去拿那个缺失信息"，不得是"推进小试"。 |
+| 5 | 结论必须与 `Next Action` 一致。`建议先验证` → Next Action 必须是"去拿那个缺失信息"，不得是"推进小试"；**并须按「三之二 · Next Action 生成要求」给出该类型的首轮加问项**。 |
 | 6 | **不得因某个字段看起来更好就跳档。** 逐条对照本文件，不凭整体印象。 |
 | 7 | 不得输出金额、折扣、报价条件、产能承诺。 |
 | 8 | **`Business Change Signal` 不得作为判定输入。** 它只作背景 / 观察项，不得导致任何档位变化。 |
 | 9 | **`FW = Yes` 不得机械降档。** 必须先过第 4b 步四问，并在结论原因中解释。 |
 | 10 | **不得用单条负面新闻覆盖更完整的集团财务事实。** 裁员 / 重组 / 厂区亏损属业务变化，不属财务困境。 |
+| 11 | **`Next Action` 的加问项必须取自 `must-ask-params.md` 第六节对应组**（映射见「三之二」）；**不得在本文件另立问题清单** —— 单一来源，避免双重维护。 |
+| 12 | **`Conflict = Yes` 时，`Next Action` 必须以「先确认合作 / 竞争边界，再进入技术讨论」开头**，并按「三之二」列出本阶段不主动释放范围；**禁止项一律复用现有规则编号，不得新造另一套 `Conflict` 判断标准**。 |
+| 13 | **`Next Action` 不得扩展为开发信 / 话术 / 跟进节奏 / 时间节点 / 联系人评分 / SDR 流程** —— 它只回答"下一步最需要确认什么"。 |
 
 ### Evidence 标注要求（遵循 `evidence-policy.md`）
 
