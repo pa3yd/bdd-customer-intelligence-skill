@@ -213,6 +213,8 @@ PAGE2_CARDS = (
     ("Priority Site｜优先厂区", "Priority Site"),
     ("Who to Contact｜找谁", "Who to Contact"),
     ("What to Verify｜还要确认什么", "What Is Missing"),
+    # V1.2.1-audit（2026-10-19）：风险块此前不上业务 PDF ⇒ 补第 6 张卡（纯搬运「**风险**」小节）
+    ("Risk & Watch｜风险与观察", "__SECTION__:风险"),
 )
 
 # Page 2 信息卡的数据来源小节（Markdown 加粗小标题 → 原样搬运）
@@ -459,7 +461,9 @@ def md_to_html_body(lines):
             t += [f"<th>{inline(c)}</th>" for c in header]
             t.append("</tr></thead><tbody>")
             for r in body_rows:
-                t.append("<tr>")
+                field_key = normalize_field(r[0]) if is_card and r else ""
+                row_attr = f' data-field="{html_mod.escape(field_key, quote=True)}"' if field_key else ""
+                t.append(f"<tr{row_attr}>")
                 for ci, c in enumerate(r):
                     # V1.1.2/V1.1.3：主卡长字段 `⟪P2⟫` 拆分 —— Page 1 只显示摘要，
                     # 完整原文登记到 field_full 供 Page 2 信息卡展示（**一字不删**）。
@@ -624,6 +628,90 @@ def validate(md_text: str):
     return (len(missing) == 0), missing, found
 
 
+# ---------------- V1.2.1-audit：证据导出门禁（2026-10-19 审计案例） ----------------
+# 修复缺陷：附录 A 表头若不含 `Decision Impact`，渲染器绑不到证据表 ⇒ Page 3 只剩图例，
+# 而旧检查仅 WARN 不阻断。本函数把证据完整性升级为**硬门禁**：
+#   ① 附录 A 存在且表头含 Decision Impact 列（渲染绑定契约）
+#   ② 证据表至少 1 条数据行（禁止空白证据附录导出）
+#   ③ 全文引用的 E# 必须在证据表中存在（禁止悬空引用）
+#   ④ 每条证据的 Source 非空（影响决策的事实必须有来源）
+#   ⑤ 每条证据的 类型 ∈ {FACT, INFERENCE, UNKNOWN*}（F/I/U 分类明确）
+# 纯校验：不改写任何内容；不通过则不出 PDF。
+EV_FIU_RE = re.compile(r"^(FACT|INFERENCE|UNKNOWN)\b")
+
+
+def check_evidence(md_text: str):
+    """证据导出门禁。返回 (ok, problems)。"""
+    problems: list = []
+
+    # ---- 定位证据表（Markdown 管道表，表头含 Decision Impact）----
+    header = None
+    rows_md = None
+    for m in re.finditer(
+        r"^\|(.+)\|\s*\n\|[\s:|-]+\|\s*\n((?:\|.*\|\s*\n?)+)", md_text, re.M
+    ):
+        cells = [c.strip() for c in m.group(1).split("|")]
+        if "Decision Impact" in cells:
+            header = cells
+            rows_md = m.group(2)
+            break
+
+    if header is None:
+        return False, ["附录 A 表头缺 `Decision Impact` 列 ⇒ 渲染器无法绑定证据表"
+                       "（Page 3 将只剩图例）。请使用标准表头："
+                       "| # | 主题 | 类型 | 结论 | Source | Reason | Confidence | Decision Impact |"]
+
+    rows = [ln for ln in (rows_md or "").splitlines() if ln.strip().startswith("|")]
+    if not rows:
+        return False, ["证据表为空（0 条数据行）—— 禁止空白证据附录导出"]
+
+    idx = {name: k for k, name in enumerate(header)}
+
+    def cells_of(ln):
+        return [c.strip() for c in ln.strip().strip("|").split("|")]
+
+    # ---- 表内完整性（对齐 evidence-policy：FACT 必须有 Source；INFERENCE 必须有
+    #      Reason + Confidence；UNKNOWN 必须带三态后缀 —— UNKNOWN 行回测校准 2026-10-19）----
+    table_ids, problems_rows = [], []
+    for ln in rows:
+        cells = cells_of(ln)
+        eid = cells[0] if cells else ""
+        if not re.match(r"E\d+$", eid):
+            problems_rows.append(f"行 ID 异常：{eid!r}（应为 E<数字>）")
+            continue
+        table_ids.append(eid)
+
+        def get(col):
+            k = idx.get(col)
+            return cells[k] if k is not None and k < len(cells) else ""
+
+        fiu = get("类型")
+        m_fiu = EV_FIU_RE.match(fiu)
+        if not m_fiu:
+            problems_rows.append(f"{eid}：类型 {fiu!r} 不属 FACT / INFERENCE / UNKNOWN")
+            continue
+        kind = m_fiu.group(1)
+        if kind == "FACT" and get("Source").strip(" *`—-") == "":
+            problems_rows.append(f"{eid}：FACT 但 Source 为空（影响决策的事实必须有来源）")
+        if kind == "INFERENCE":
+            if get("Reason").strip(" *`—-") == "" or get("Confidence").strip(" *`—-") == "":
+                problems_rows.append(f"{eid}：INFERENCE 但 Reason / Confidence 为空")
+        if kind == "UNKNOWN" and not re.search(
+            r"(searched|no source|not searched)", fiu
+        ):
+            problems_rows.append(f"{eid}：UNKNOWN 未带三态后缀（searched / no source / not searched）")
+
+    # ---- 悬空引用（全文引用的 E# 必须在表中）----
+    cited = {f"E{n}" for n in re.findall(r"\bE(\d{1,3})\b", md_text)}
+    missing = sorted(cited - set(table_ids), key=lambda x: int(x[1:]))
+
+    problems.extend(problems_rows)
+    if missing:
+        problems.append("悬空引用（引用了证据表不存在的编号）："
+                        + "、".join(missing) + " —— 不得引用不存在的证据")
+    return (not problems), problems
+
+
 def split_audit_sections(md_text):
     """V1.1.3：把 Markdown 切成「业务 PDF 区」与「审计区」。
 
@@ -679,17 +767,28 @@ def page2_cards_html(md_text, field_full):
     cards = []
 
     for title, key in PAGE2_CARDS:
-        if key is None:
+        if key is None or (isinstance(key, str) and key.startswith("__SECTION__:")):
             # ① Why BDD —— 由「BDD Opportunity 判定依据」+「Demand Status 明细」组成
+            # ⑥ Risk & Watch（V1.2.1-audit）—— 搬运「**风险**」小节
             body = []
-            for name in PAGE2_SOURCES:
-                for ln in secs.get(name, []):
+            if isinstance(key, str) and key.startswith("__SECTION__:"):
+                sec = key.split(":", 1)[1]
+                for ln in secs.get(sec, []):
                     t = ln.strip()
                     if not t:
                         continue
                     if re.match(r"^[-*]\s+", t):
                         t = re.sub(r"^[-*]\s+", "", t)
                     body.append(f'<div class="si-kv">{inline(t)}</div>')
+            else:
+                for name in PAGE2_SOURCES:
+                    for ln in secs.get(name, []):
+                        t = ln.strip()
+                        if not t:
+                            continue
+                        if re.match(r"^[-*]\s+", t):
+                            t = re.sub(r"^[-*]\s+", "", t)
+                        body.append(f'<div class="si-kv">{inline(t)}</div>')
             cards.append(render_si_card(title, "".join(body) or "<div class='si-kv'>—</div>"))
             continue
 
@@ -705,7 +804,7 @@ def page2_cards_html(md_text, field_full):
 def split_pdf_pages(blocks):
     """业务三页的素材切分（纯版式操作，不改内容）。
 
-    Page 1  客户快照 —— 主卡四组 + 结论卡（**V1.1.3 起完全不变**）
+    Page 1  客户快照 —— 决策 / 行动模块优先，其后为 WHO / WHY / WHERE 三组
     Page 2  SALES INTELLIGENCE —— 由 `page2_cards_html()` 现场生成，不取这里的块
     Page 3  KEY EVIDENCE      —— 取 Markdown 附录 A 的 Evidence 表（转为卡片）
 
@@ -724,8 +823,100 @@ def split_pdf_pages(blocks):
     return page1, ev_table
 
 
+def decision_first_page(blocks):
+    """Reorder existing card fields into a decision-first Page 1.
+
+    Presentation only: every existing Internal Key is rendered once, and all
+    field text and conclusion wording are copied from the parsed source blocks.
+    If the expected 13 keyed rows or conclusion card are missing, preserve the
+    legacy page blocks unchanged.
+    """
+    rows = {}
+    title = None
+    metadata = []
+    conclusion = None
+    for block in blocks:
+        if block.startswith("<h1>") and title is None:
+            title = block
+            continue
+        if 'class="card-table"' in block:
+            for key, row_html in re.findall(
+                r'<tr data-field="([^"]+)">(.*?)</tr>', block, re.S
+            ):
+                rows[key] = f"<tr data-field=\"{key}\">{row_html}</tr>"
+        elif 'class="conclusion ' in block:
+            conclusion = block
+        elif not re.search(r"<h3[^>]*class=\"group-title\"", block):
+            if not re.search(r"<table class=\"card-table\"", block):
+                metadata.append(block)
+
+    required_rows = [k for k in REQUIRED_FIELDS if k != "Sales Conclusion"]
+    if title is None or conclusion is None or any(k not in rows for k in required_rows):
+        return blocks
+
+    def table(keys, extra_class="", with_head=True):
+        body = "".join(rows[k] for k in keys)
+        # V1.2.1-fix：恢复原主卡表格的「字段 / 判定」表头行（重排时曾丢失）
+        head = ("<thead><tr><th>字段</th><th>判定</th></tr></thead>"
+                if with_head else "")
+        return (f'<table class="card-table {extra_class}">{head}<tbody>{body}'
+                f'</tbody></table>')
+
+    action_keys = ["Next Action", "Who to Contact", "What Is Missing"]
+    info_groups = (
+        ("01 WHO ｜客户是谁", ["Company", "Country", "What They Do", "Customer Type"]),
+        ("02 WHY ｜为什么值得看", ["Industry Match", "BDD Opportunity", "Demand Status"]),
+        ("03 WHERE / WHO ｜从哪里切入", [
+            "Current Wastewater Treatment / Technology", "Priority Site"
+        ]),
+    )
+    action_module = (
+        '<div class="decision-action">'
+        '<div class="decision-verdict">' + conclusion + '</div>'
+        '<div class="decision-next">' + table(["Next Action"], "next-action-table") + '</div>'
+        '<div class="decision-support">' + table(
+            ["Who to Contact", "What Is Missing"], "support-action-table"
+        ) + '</div></div>'
+    )
+    out = [title] + metadata + [action_module]
+    for heading, keys in info_groups:
+        out.append(f'<h3 class="group-title">{esc(heading)}</h3>')
+        out.append(table(keys))
+    return out
+
+
 def _plain(h: str) -> str:
     return re.sub(r"<[^>]+>", "", h or "").strip()
+
+
+# ---------------- V1.2.1-audit：Page 1 决策条（2026-10-19） ----------------
+# 用户要求 Page 1 一屏突出：评级 / Gate / 风险 / 下一步 / 测试报价状态。
+# 评级（结论卡）与下一步（Next Action）已在决策模块置顶；本条补 **Gate / Commercial Risk /
+# 测试报价** 三个摘要值 —— 全部**机械抽取自 Markdown 原文**，取不到即整段省略，不新增不推断。
+def decision_strip_html(md_text: str):
+    items = []
+
+    m = re.search(r"(?:Gate|Guard)[^=＝\n]{0,6}[=＝]\s*[`*]*\s*([A-Z][a-z]+)", md_text)
+    if m:
+        items.append(f"<span>Gate: <b>{esc(m.group(1))}</b></span>")
+
+    m = re.search(r"Commercial Risk[^\n]*?[：:]", md_text)
+    if m:
+        tail = md_text[m.end():m.end() + 80]
+        m2 = re.search(
+            r"[`*]*\s*(?:⚪|🟢|🟡|🔴)?\s*[`*]*\s*"
+            r"((?:Unknown|Low|Medium|High)(?:\s*·\s*(?:searched|no source|not searched))?)",
+            tail,
+        )
+        if m2:
+            items.append(f"<span>Commercial Risk: <b>{esc(m2.group(1))}</b></span>")
+
+    if re.search(r"按范围冻结", md_text):
+        items.append("<span>技术测试 / 报价: <b>按范围冻结（未输出）</b></span>")
+
+    if not items:
+        return ""
+    return ('<div class="decision-strip">' + "".join(items) + "</div>")
 
 
 def evidence_to_cards(blocks):
@@ -775,16 +966,23 @@ def evidence_to_cards(blocks):
             eid = _plain(cell(c, "#"))
             topic = _plain(cell(c, "主题"))
             fact = cell(c, "结论")
-            src = _plain(cell(c, "Source"))
+            src_cell = cell(c, "Source")
+            src = re.sub(r"^<td>(.*)</td>$", r"\1", src_cell, flags=re.S)
+            # ⚠️ 仅当来源是**不含任何 HTML 标签的纯文本**时才按 Markdown 处理。
+            #    已含标签（<a> / <code> / <strong> …）的一律原样保留 —— 否则 inline()
+            #    会把标签二次转义成 &lt;code&gt; 并以**字面文本**印进 PDF（实测缺陷）。
+            if src and not re.search(r"<\s*/?\s*[A-Za-z]", src):
+                src = inline(src)
+            src_plain = _plain(src)
             heading = eid if not topic else f"{eid} · {topic}"
             lines = [f'<div class="ev-topic">{esc(heading)}</div>',
                      f'<div class="ev-fact">{fact}</div>']
-            if src not in ("", "—", "-"):
+            if src_plain not in ("", "—", "-"):
                 lines.append(f'<div class="ev-src">来源：{src}</div>')
             cards.append('<div class="ev-card">' + "".join(lines) + "</div>")
 
         out.append(f'<div class="ev-list">共 {len(cards)} 条关键依据'
-                   f'（完整 Evidence 明细见 Markdown 附录 A）</div>'
+                   f'（全量 F/I/U 证据表附后）</div>'
                    + "".join(cards))
     return out
 
@@ -823,7 +1021,7 @@ p { margin: 3px 0; }
 h3.group-title {
   font-size: 9.5pt; font-weight: 700; letter-spacing: .03em;
   color: #1f2b3a; background: #e8eef5;
-  margin: 7px 0 2px 0; padding: 3px 8px;
+  margin: 8px 0 3px 0; padding: 4px 8px; break-after: avoid;
   border-left: 0; border-bottom: 0; border-radius: 2px;
 }
 h3.group-title.sub { background: #f2f5f9; color: #47566b; font-size: 9.8pt; }
@@ -835,9 +1033,39 @@ th, td { border: 1px solid #d6dae0; padding: 5px 7px;
 th { background: #f2f4f6; font-weight: 600; }
 table.data-table td:first-child { white-space: nowrap; }
 
-/* ---- V1.1.2 主卡：字段列浅灰蓝 + 固定 20%；判定列白底 ---- */
-table.card-table { font-size: 9.4pt; margin: 3px 0; }
-table.card-table td { background: #ffffff; padding: 3.5px 7px; }
+/* ---- V1.2.1 主卡：决策与行动优先；不改变字段值或判断 ---- */
+.decision-action {
+  border: 1px solid #d6dae0; border-radius: 3px; background: #f8fafc;
+  padding: 7px 9px; margin: 6px 0 8px 0; break-inside: avoid;
+  display: grid; grid-template-columns: 1.05fr 1.25fr; gap: 6px 10px;
+}
+.decision-verdict { grid-column: 1 / -1; }
+.decision-verdict blockquote.conclusion { margin: 0; padding: 6px 10px; }
+.decision-verdict .concl-verdict { font-size: 14pt; }
+.decision-next { grid-column: 1 / -1; border-left: 4px solid #2f6fb5;
+  background: #edf4fb; padding: 5px 8px; }
+.decision-support { grid-column: 1 / -1; }
+table.card-table.next-action-table { margin: 0; }
+table.card-table.next-action-table td { padding: 4px 6px; }
+table.card-table.next-action-table td:last-child { font-size: 10.5pt; font-weight: 700; }
+/* support 表原为 8.7pt（偏小）；按「不靠缩字号压页」的口径提到 9.2pt */
+table.card-table.support-action-table { margin: 0; font-size: 9.2pt; }
+table.card-table.support-action-table td { padding: 3px 6px; }
+table.card-table.support-action-table td:first-child { width: 20%; }
+table.card-table.next-action-table thead th,
+table.card-table.support-action-table thead th { padding: 2px 6px; }
+/* ---- 主卡：字段列浅灰蓝 + 固定 20%；判定列白底 ---- */
+/* V1.2.1-fix：恢复表头行后，用「自动换行 + 内边距 + 行高」抵消高度，
+   **不缩小正文字号**（保持 9.8pt 可读性）。
+   ⚠️ 不加 `table-layout: fixed` —— 实测它会强制列宽、令单元格换行变高，
+      使 3 个样本从 3 页涨到 4 页（变体实验 V0=4页 / V4=3页）。 */
+table.card-table { font-size: 9.8pt; margin: 4px 0; width: 100%; line-height: 1.3; }
+table.card-table thead th { background: #e8eef5; color: #1f2b3a;
+                            font-weight: 700; padding: 3px 7px;
+                            text-align: left; vertical-align: middle; }
+table.card-table td { background: #ffffff; padding: 4px 7px;
+                      overflow-wrap: anywhere; word-break: break-word; }
+table.card-table tr { break-inside: avoid; }
 table.card-table td:first-child {
   width: 20%; background: #eef2f7; white-space: normal;
   text-align: left; vertical-align: middle;
@@ -901,8 +1129,27 @@ blockquote.conclusion.concl-unk  { background: #f7f8fa; border-color: #d9dee3;
 .ev-topic { font-size: 8.8pt; font-weight: 700; color: #2f6fb5;
             margin-bottom: 1px; text-align: left; }
 .ev-fact { font-size: 8.2pt; line-height: 1.36; color: #1c1f23; text-align: left; }
-.ev-src { font-size: 7.8pt; line-height: 1.3; color: #6b7480;
+.ev-src { font-size: 7.8pt; line-height: 1.3; color: #526170;
           margin-top: 1px; text-align: left; }
+.ev-src a { color: #215d9e; text-decoration: underline; text-underline-offset: 1px; }
+
+/* ---- V1.2.1-audit（2026-10-19）---- */
+/* Page 1 决策条：Gate / Commercial Risk / 测试报价 摘要 */
+.decision-strip {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: 2px 14px;
+  border-top: 1px solid #dbe1e8; margin-top: 2px; padding: 3px 2px 0 2px;
+  font-size: 8.2pt; color: #33404e;
+  break-inside: avoid;
+}
+.decision-strip b { color: #14202c; }
+/* 分页卫生：卡片 / 表格行 / 小节标题不跨页截断 */
+.ev-card, .si-card, .decision-action, .decision-strip,
+.conclusion, tr { break-inside: avoid; }
+thead { display: table-header-group; }
+/* Page 3 起全量证据表（自然分页）：压缩行距保证信息密度 */
+table.data-table { font-size: 8.4pt; }
+table.data-table td, table.data-table th { padding: 3px 5px; }
 
 /* ---- V1.1.2 Page 2/3 正文密度容器 ---- */
 .body-dense { font-size: 9pt; line-height: 1.38; }
@@ -940,17 +1187,32 @@ def build_html(md_text: str, single: bool) -> str:
     """Markdown → 业务 PDF 的 HTML。
 
     V1.1.3：Markdown 先按「业务区 / 审计区」切分 —— 审计区不进入 PDF。
+    V1.2.1：第一页将现有结论、下一步、联系人、缺项组成决策/行动模块置顶；
+    其后仅显示 WHO / WHY / WHERE 事实分组，13 个 Internal Key 各显示一次。
     """
     pdf_md, _audit_md = split_audit_sections(md_text)
     lines = pdf_md.splitlines()
     blocks, _, field_full = md_to_html_body(lines)
 
     p1_blocks, ev_table = split_pdf_pages(blocks)
+    p1_blocks = decision_first_page(p1_blocks)
 
-    # Page 2 · SALES INTELLIGENCE（5 张销售信息卡，内容取自 Markdown 字段原文）
+    # V1.2.1-audit：Page 1 决策条（Gate / Commercial Risk / 测试报价状态 —— 机械抽取，取不到则省略）
+    # 注：置于决策模块**内部**（末行），避免外挂块把 Page 1 顶出一屏（实测 2026-10-19 缺陷）。
+    strip = decision_strip_html(md_text)
+    if strip:
+        for k, b in enumerate(p1_blocks):
+            if b.startswith('<div class="decision-action">') and b.rstrip().endswith("</div>"):
+                p1_blocks[k] = b.rstrip()[: -len("</div>")] + strip + "</div>"
+                break
+
+    # Page 2 · SALES INTELLIGENCE（销售信息卡，内容取自 Markdown 字段原文）
     page2 = page2_cards_html(pdf_md, field_full)
-    # Page 3 · KEY EVIDENCE（6~8 条卡片，不含审计术语）
+    # Page 3 · KEY EVIDENCE（6~8 条卡片）+ **全量 F/I/U 证据表**（V1.2.1-audit：
+    # 完整证据随 PDF 交付，第 3 页起按内容自然分页；表格跨页时 Chrome 自动重复表头）
     page3 = evidence_to_cards([ev_table]) if ev_table else []
+    if ev_table is not None:
+        page3 = page3 + [ev_table]
 
     # 抽取标题（第一个 h1）
     title = ""
@@ -981,10 +1243,12 @@ def build_html(md_text: str, single: bool) -> str:
 
     for idx, page in enumerate(pages):
         name = page_names[idx]
+        # V1.2.1-audit：P3 起全量证据自然分页 ⇒ 物理页数可能 > 3；页码改用节号（P1/P2/P3），
+        # 不再标「n / 3」以免与实际页数不符。
         html_parts.append("<section class='page'>")
         html_parts.append(
             f"<div class='page-head'><span>{esc(name)}</span>"
-            f"<span class='pagenum'>{idx + 1} / {len(pages)}</span></div>"
+            f"<span class='pagenum'>P{idx + 1}</span></div>"
         )
         if not single and idx >= 1:
             html_parts.append("<div class='body-dense'>")
@@ -1034,7 +1298,10 @@ def html_to_pdf(html_path: Path, pdf_path: Path) -> None:
         raise RuntimeError(
             "未找到 Chrome / Edge。请安装 Google Chrome 或 Microsoft Edge 后重试。"
         )
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_profile = tempfile.mkdtemp(prefix="bdd_pdf_")
+    render_dir = Path(tempfile.mkdtemp(prefix=".bdd_pdf_render_", dir=str(pdf_path.parent)))
+    staged_pdf = render_dir / pdf_path.name
     cmd = [
         browser,
         "--headless=new",
@@ -1043,16 +1310,68 @@ def html_to_pdf(html_path: Path, pdf_path: Path) -> None:
         f"--user-data-dir={tmp_profile}",
         "--no-pdf-header-footer",
         "--print-to-pdf-no-header",
-        f"--print-to-pdf={str(pdf_path)}",
+        f"--print-to-pdf={str(staged_pdf)}",
         html_path.as_uri(),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-    if not pdf_path.exists() or pdf_path.stat().st_size == 0:
-        raise RuntimeError(
-            "PDF 生成失败。\n"
-            f"exit={proc.returncode}\nstdout={proc.stdout[-1500:]}\nstderr={proc.stderr[-1500:]}"
-        )
-    shutil.rmtree(tmp_profile, ignore_errors=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if proc.returncode != 0 or not staged_pdf.exists() or staged_pdf.stat().st_size == 0:
+            raise RuntimeError(
+                "PDF 生成失败。\n"
+                f"exit={proc.returncode}\nstdout={proc.stdout[-1500:]}\nstderr={proc.stderr[-1500:]}"
+            )
+        # Replace atomically only after Chrome produced a fresh, non-empty PDF.
+        os.replace(staged_pdf, pdf_path)
+    finally:
+        shutil.rmtree(tmp_profile, ignore_errors=True)
+        shutil.rmtree(render_dir, ignore_errors=True)
+
+
+def check_page_flow(pdf_path: Path):
+    """P1/P2 溢出检测（V1.2.1-audit · 2026-10-19）。
+
+    物理第 2 页应以「SALES INTELLIGENCE」开头、第 3 页以「KEY EVIDENCE」开头；
+    否则说明第 1 / 2 节内容溢出（典型症状：几十字符的孤立页）。
+    **只报告、不阻断**（与 CHECK_pages 同口径）；pymupdf 不可用时返回 None。
+    """
+    try:
+        import pymupdf  # type: ignore
+        with pymupdf.open(str(pdf_path)) as doc:
+            pages = [pg.get_text().strip() for pg in doc]
+    except Exception:
+        return None
+    problems = []
+    if len(pages) >= 2 and not pages[1].startswith("SALES INTELLIGENCE"):
+        problems.append(f"P1 溢出：物理第 2 页仅 {len(pages[1])} 字符且非 P2 节头"
+                        "（主卡超一屏，请按「Page 1 摘要纪律」压缩字段）")
+    if len(pages) >= 3 and not pages[2].startswith("KEY EVIDENCE"):
+        problems.append(f"P2 溢出：物理第 3 页非 KEY EVIDENCE 节头（P2 卡片超一屏）")
+    return problems
+
+
+def count_pdf_pages(pdf_path: Path):
+    """读取 PDF 页数 —— 优先 pymupdf，否则纯 stdlib 扫描（**零强制依赖**）。
+
+    合并说明（2026-10-13 成本优化 Patch 2）：原先「渲染后再由调用方另跑一次
+    pymupdf 查页数」属于**重复的机械性检查**（同一次渲染的结论要跑两遍）。
+    现并入渲染层输出 CHECK_pages，调用方以本行输出为准，不再另行核对。
+    本函数**只读取页数，不参与任何判断**（渲染层隔离要求不变）。
+    """
+    try:                                    # ① pymupdf（若环境已装）
+        import pymupdf  # type: ignore
+        with pymupdf.open(str(pdf_path)) as doc:
+            return doc.page_count
+    except Exception:
+        pass
+    try:                                    # ② stdlib 回退：数 /Type /Page 对象
+        raw = pdf_path.read_bytes()
+    except Exception:
+        return None
+    pages = len(re.findall(rb"/Type\s*/Page(?![s])", raw))
+    if pages:
+        return pages
+    counts = [int(n) for n in re.findall(rb"/Count\s+(\d+)", raw)]
+    return max(counts) if counts else None
 
 
 # ---------------------------------------------------------------- main
@@ -1086,8 +1405,16 @@ def main():
         print("       请先补齐 Markdown 主卡后再渲染。")
         return 3
     print("CHECK_main_card    : PASS")
-    print("CHECK_evidence_col : "
-          + ("PASS" if "Decision Impact" in md_text else "WARN — 附录缺 Decision Impact 列"))
+    # ---- V1.2.1-audit：证据导出门禁（硬门禁，FAIL 不出 PDF）----
+    ev_ok, ev_problems = check_evidence(md_text)
+    if ev_ok:
+        print("CHECK_evidence     : PASS — 证据表绑定 / 引用完整性 / Source / F-I-U 全量核对通过")
+    else:
+        print("CHECK_evidence     : FAIL —")
+        for p in ev_problems:
+            print(f"    · {p}")
+        print("\n[FAIL] 证据校验未通过，按导出门禁**不生成 PDF**。请先修复 Markdown 附录 A / 引用。")
+        return 5
 
     # ---- HTML
     html_doc = build_html(md_text, args.single)
@@ -1109,6 +1436,31 @@ def main():
 
     size_kb = pdf_path.stat().st_size / 1024
     print(f"CHECK_pdf          : PASS — {pdf_path} ({size_kb:.1f} KB)")
+
+    # ---- 页数核对（V1.2.1-audit：第 3 页起全量证据自然分页 ⇒ 目标改为「≥ 3 页」；只报告、不阻断）
+    if not args.single:
+        n_pages = count_pdf_pages(pdf_path)
+        if n_pages is None:
+            print("CHECK_pages        : MANUAL — 未能自动读取页数，请人工确认（≥ 3 页）")
+        elif n_pages >= 3:
+            print(f"CHECK_pages        : PASS — {n_pages} 页（P1 快照 / P2 开发情报 / "
+                  "P3 起关键依据 + 全量证据自然分页）")
+        else:
+            print(f"CHECK_pages        : FAIL — 仅 {n_pages} 页（目标 ≥ 3 页）；"
+                  "证据表可能未渲染，请核对附录 A")
+
+    # ---- V1.2.1-audit：P1/P2 溢出检测（只报告、不阻断）
+    if not args.single:
+        flow = check_page_flow(pdf_path)
+        if flow is None:
+            print("CHECK_page_flow    : MANUAL — pymupdf 不可用，请人工核对 P1/P2 是否溢出")
+        elif flow:
+            print("CHECK_page_flow    : WARN —")
+            for p in flow:
+                print(f"    · {p}")
+        else:
+            print("CHECK_page_flow    : PASS — P1/P2 各自一屏内，无孤立溢出页")
+
     print("=" * 66)
     print("渲染层声明：本次仅做格式转换，未新增 / 推断 / 改写任何结论；")
     print("           颜色由映射表机械查得；Markdown 为权威版本。")
