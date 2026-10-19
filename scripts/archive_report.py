@@ -239,8 +239,19 @@ def parse_md_company(md_text: str) -> str:
             val = m.group(2).strip().strip("*").strip()
             if not val:
                 continue
-            # 去掉后缀的（国家）· 核实三态
-            val = re.split(r"[（(]", val)[0]
+            # 去掉**尾部**的（国家 / 地区）· 核实三态
+            # ⚠️ 不得用「在第一个括号处切分」—— 登记全称本身可能含括号：
+            #    「某集团公司全称（印度）· Verified」会被截成首段简称（实证 bug，
+            #    且截断后的短名可能成为其它客户规范名的前缀 → 触发误并风险）。
+            # 规则：① 先剥离尾部「（…）· <核实三态>」；② 否则仅剥离尾部**全角**括号组
+            #      （报告约定用全角括号标国别；半角括号多为登记名的一部分）；③ 再按「·」「|」截断。
+            _m = re.search(r"[（(][^（()）]*[)）]\s*(?:·\s*)?\**\s*"
+                           r"(?:Partially\s+Verified|Verified|Unverified)",
+                           val, re.I)
+            if _m:
+                val = val[: _m.start()]
+            else:
+                val = re.sub(r"\s*[（][^（）]*[）]\s*$", "", val)
             for sep in ("·", "|"):
                 if sep in val:
                     val = val.split(sep)[0]
