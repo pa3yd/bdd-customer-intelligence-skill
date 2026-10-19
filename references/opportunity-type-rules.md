@@ -48,6 +48,8 @@
 | 既做分销，又做少量集成 | 以**证据更强的能力**为主类型 |
 | 自有工艺与 BDD 目标场景重叠 | 主类型照常输出，但**必须同时标注 `Conflict: 潜在竞争`**（红色语义），不得隐藏 |
 
+> **V1.2 细化**：`Conflict` 须在附录 B 按 `bdd-relevance-rules.md` 5.1 区分 `Direct competitor`、`Integration overlap`、`Component procurement`。通用 AOP 工程设计不等于拥有同域专有产品；系统级竞争者也可能有集团外部件采购切面。两者并存时分别列 E#，不得只用「潜在竞争」四字决定 Sales Conclusion。
+
 > **EPC 兼自有工艺线型主体**：同时具备 EPC 承接、自有 AOP 产品线（UV/H₂O₂、臭氧）、自有生产制造 → 正确输出为
 > `EPC / Integration Opportunity +| Technology Partner Opportunity`，并标注 `Conflict: 潜在竞争（自有 AOP 产品线）`。
 

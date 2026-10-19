@@ -654,3 +654,32 @@ PDF（业务员版）                  ← 交付物之一（另一个为 Markdo
 | 4 | 是否需要在 PDF 页脚加公司标识与免责声明 | 公司 |
 | 5 | **V1.1.1 四组阅读顺序（WHO → WHY → WHERE/WHO → ACTION）是否符合业务员实际翻查习惯** | 销售 |
 | 6 | **`Current Treatment` 四态徽标是否需要加中文（已确认 / 部分 / 规划中 / 未知）** | 销售 |
+
+## 第九部分 · V1.2.1 业务员首屏优化（只改展示，不改判断）
+
+本部分为第一页的当前有效版式，**覆盖本文件旧版“WHO → WHY → WHERE/WHO → ACTION，结论卡置于四组之后”的 Page 1 顺序描述**。Page 2 / Page 3 的既有结构不变。
+
+### 页面阅读顺序
+
+第一页按“先决定怎么做，再查事实依据”的顺序显示：
+
+1. **Decision & Action 模块（页首）**：Sales Conclusion 原结论卡；紧接 Next Action；随后显示 Who to Contact 与 What Is Missing。
+2. **WHO**：Company、Country、What They Do、Customer Type。
+3. **WHY**：Industry Match、BDD Opportunity、Demand Status。
+4. **WHERE**：Current Treatment、Priority Site。
+
+主卡 **13 个 Internal Key 全部保留且每项只显示一次**。为让“现在做什么”第一眼可见，`Who to Contact` 从 WHERE 的视觉位置移入页首行动模块；`Sales Conclusion`、`Next Action`、`What Is Missing` 同样在该模块内。字段含义、原文、判断值、颜色映射均不改变。
+
+### 行动模块层级
+
+- Sales Conclusion 保留既有五值及原因原文，仍使用对应语义颜色。
+- Next Action 使用最高的行动文字层级；联系人角色与最关键缺项紧随其后，作为行动所需上下文。
+- 渲染层只搬运 Markdown 已有字段，不自动生成“联系谁 / 问什么 / 何时跟进”等内容，也不新增前置条件或停止条件。
+- `Unknown` 使用中性灰和文字标签；不得将缺失信息染成风险色。红色仍只代表原有映射中的负面、风险或冲突状态。
+
+### 证据与版面
+
+- 主卡字段值维持可读字号，字段名列与短状态徽标沿用既有规范；减少无信息的大片空白，但不得为填满页面增加装饰、指标或重复字段。
+- Page 3 的 Source 保留原 Markdown 链接为可点击链接；源文本不是链接时只按原样展示，不猜测 URL。
+- 不新增分数、优先级等级、机会指标或绩效承诺。Decision Impact 仍只控制证据页选取顺序，不改变真实性或销售判断。
+- 13 字段缺失、结论卡缺失或字段无法解析时，保留旧版渲染并由完整性校验报错；不得静默生成不完整的新布局。
