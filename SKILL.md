@@ -580,6 +580,8 @@ Opportunity Type  五值之一（复合时用 " +| " 连接）
 
 用 WebSearch / WebFetch 检索。**每条产出必须标注 FACT / INFERENCE / UNKNOWN + Decision Impact。**
 
+**缺席证据检查（出卡前人工复核）**：官网菜单、产品目录或项目展示中「未见某技术」只能写成 `UNKNOWN · searched`，并列明检索范围；不得改写成「该主体没有该技术 / 不存在竞争 / 必然互补」。只有来源明确否认且指向目标主体时，才可把否定事实写为 FACT。此检查不改变任何评级、合作闸门或发送条件。
+
 检索优先级（详见 `references/lead-signals.md`）：
 
 | 优先级 | 查什么 |
@@ -729,15 +731,16 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 
 1. 生成 `{Company}_BDD_Intelligence_{YYYY-MM-DD}.md`（落在工作区根，`render_pdf.py` 默认行为不变）
 2. 调用 `scripts/render_pdf.py` 生成同名 `.pdf`
-3. **调用 `scripts/archive_report.py` 归档到客户档案库（V1.1.4 → V1.1.5：归档成功后清理工作区根的那一份）** —— 见下
+3. 确认 `CHECK_evidence`、`CHECK_pdf_content` 和 `CHECK_page_flow` 均为 `PASS`；任一 `FAIL` 时先修报告或版式，不归档该次 PDF。
+4. **调用 `scripts/archive_report.py` 归档到客户档案库（V1.1.4 → V1.1.5：归档成功后清理工作区根的那一份）** —— 见下
 
-**PDF 为业务员版（三页），仅做格式转换，不得反向影响任何判断。**
+**PDF 为业务员版；前两页固定，第三页起为关键依据与完整证据表，可自然续页。仅做格式转换，不得反向影响任何判断。**
 
 | PDF 页 | 内容（V1.1.3） |
 |---|---|
 | Page 1 | `Customer Snapshot ｜客户快照` —— 主卡四组 + 结论卡（**自 V1.1.2 起完全不变**） |
 | Page 2 | `SALES INTELLIGENCE ｜开发情报` —— 5 张销售信息卡（Why BDD / Current Treatment / Priority Site / Who to Contact / What to Verify） |
-| Page 3 | `KEY EVIDENCE ｜关键依据` —— 6~8 条，每条仅 **主题 / 简洁事实 / Source** |
+| Page 3 起 | `KEY EVIDENCE ｜关键依据` —— 6~8 条摘要卡，随后为完整证据表；续页须有实际内容 |
 
 > 审计与边界信息（可溯源率 / 类型定义 / 实体排除 / 来源冲突 / 边界声明）**不进业务 PDF**，只保留在 Markdown 附录 B。
 

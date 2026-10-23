@@ -69,6 +69,7 @@
 | WorkBuddy | 已安装并登录（Skill 的运行环境） |
 | Python | 3.10 以上（生成 PDF 需要，WorkBuddy 自带） |
 | 浏览器 | 装了 Google Chrome 或 Microsoft Edge 即可 |
+| PDF 内容核对 | `pypdf`，运行 `python -m pip install -r requirements.txt` 安装；缺失时渲染检查会报错，不会误报通过 |
 
 ### 安装步骤
 

@@ -237,7 +237,7 @@ EVIDENCE_CARD_LIMIT = 8
 # ---- V1.1.3：业务 PDF / Markdown 审计区的切分标记 ----
 # 以下章节属**开发 / 审计信息**，只在 Markdown 保留，不进入业务 PDF：
 #   附录 B（可溯源率 / 类型定义 / 实体排除 / 来源冲突 …）、边界声明
-AUDIT_SECTION_PREFIXES = ("## 附录 B", "## 边界声明", "# 附录 B", "# 边界声明")
+AUDIT_SECTION_RE = re.compile(r"^#{1,6}\s+(?:附录 B|边界声明)\b", re.M)
 
 # ---- V1.1.3：Page 2「SALES INTELLIGENCE｜开发情报」五张销售信息卡 ----
 # (卡片标题, 数据来源)
@@ -688,11 +688,20 @@ def check_evidence(md_text: str):
     """证据导出门禁。返回 (ok, problems)。"""
     problems: list = []
 
+    # 附录 A 证据段（次序无关，V1.2.1-fix：可在附录 B 之前或之后；
+    # 与 build_html 的 extract_evidence_table_html 抽取口径一致）。
+    a_match = re.search(r"(?:<summary>|#{1,6}\s+)附录 A\b", md_text)
+    if not a_match:
+        return False, ["缺少 附录 A 证据段；证据不会进入 PDF"]
+    a_start = a_match.end()
+    end_match = re.search(r"(?:<summary>|#{1,6}\s+)(附录 B|边界声明)\b", md_text[a_start:])
+    evidence_section = md_text[a_start: a_start + end_match.start()] if end_match else md_text[a_start:]
+
     # ---- 定位证据表（Markdown 管道表，表头含 Decision Impact）----
     header = None
     rows_md = None
     for m in re.finditer(
-        r"^\|(.+)\|\s*\n\|[\s:|-]+\|\s*\n((?:\|.*\|\s*\n?)+)", md_text, re.M
+        r"^\|(.+)\|\s*\n\|[\s:|-]+\|\s*\n((?:\|.*\|\s*\n?)+)", evidence_section, re.M
     ):
         cells = [c.strip() for c in m.group(1).split("|")]
         if "Decision Impact" in cells:
@@ -766,10 +775,50 @@ def split_audit_sections(md_text):
     lines = md_text.splitlines(keepends=True)
     cut = len(lines)
     for k, ln in enumerate(lines):
-        if any(ln.strip().startswith(p) for p in AUDIT_SECTION_PREFIXES):
+        if AUDIT_SECTION_RE.match(ln.strip()):
             cut = k
             break
     return "".join(lines[:cut]), "".join(lines[cut:])
+
+
+def extract_evidence_table_html(md_text: str):
+    """附录 A 证据表 → HTML data-table（次序无关，V1.2.1-fix）。
+
+    无论附录 A 位于附录 B 之前或之后，都能从全文本定位附录 A 区段、
+    抽取带 `Decision Impact` 列的管道表，并转为与 `md_to_html_body` 完全一致的
+    `<table class="data-table">` 格式。修复「附录 A 在附录 B 之后时证据被截断、
+    KEY EVIDENCE 页空白」的潜伏缺陷（原 build_html 仅在 pdf_md 内找证据表）。
+    纯版式抽取，不改写任何字段值，不新增 / 推断任何结论。
+    """
+    a_match = re.search(r"(?:<summary>|#{1,6}\s+)附录 A\b", md_text)
+    if not a_match:
+        return None
+    start = a_match.end()
+    end_match = re.search(r"(?:<summary>|#{1,6}\s+)(附录 B|边界声明)\b", md_text[start:])
+    seg = md_text[start: start + end_match.start()] if end_match else md_text[start:]
+    lines = seg.splitlines()
+    n = len(lines)
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if s.startswith("|") and i + 1 < n and is_table_sep(lines[i + 1]):
+            header = split_row(s)
+            if "Decision Impact" in header:
+                body_rows = []
+                j = i + 2
+                while j < n and lines[j].strip().startswith("|"):
+                    body_rows.append(split_row(lines[j].strip()))
+                    j += 1
+                t = ['<table class="data-table">', "<thead><tr>"]
+                t += [f"<th>{inline(c)}</th>" for c in header]
+                t.append("</tr></thead><tbody>")
+                for r in body_rows:
+                    t.append("<tr>")
+                    for c in r:
+                        t.append(f"<td>{inline(c)}</td>")
+                    t.append("</tr>")
+                t.append("</tbody></table>")
+                return "".join(t)
+    return None
 
 
 BOLD_HEAD_RE = re.compile(r"^\*\*(.+?)\*\*\s*$")
@@ -1241,6 +1290,12 @@ def build_html(md_text: str, single: bool) -> str:
     p1_blocks, ev_table = split_pdf_pages(blocks)
     p1_blocks = decision_first_page(p1_blocks)
 
+    # V1.2.1-fix：证据表次序无关抽取（修复「附录 A 在附录 B 之后时证据被截断、
+    # KEY EVIDENCE 页空白」的潜伏缺陷）。split_pdf_pages 仅在 pdf_md 内找证据表，
+    # 附录 A 落在审计区（pdf_md 之外）时回退到全文本抽取。
+    if ev_table is None:
+        ev_table = extract_evidence_table_html(md_text)
+
     # V1.2.1-audit：Page 1 决策条（Gate / Commercial Risk / 测试报价状态 —— 机械抽取，取不到则省略）
     # 注：置于决策模块**内部**（末行），避免外挂块把 Page 1 顶出一屏（实测 2026-10-19 缺陷）。
     strip = decision_strip_html(md_text)
@@ -1376,14 +1431,19 @@ def check_page_flow(pdf_path: Path):
 
     物理第 2 页应以「SALES INTELLIGENCE」开头、第 3 页以「KEY EVIDENCE」开头；
     否则说明第 1 / 2 节内容溢出（典型症状：几十字符的孤立页）。
-    **只报告、不阻断**（与 CHECK_pages 同口径）；pymupdf 不可用时返回 None。
+    优先 pymupdf，缺失时用 pypdf 读取文本；两者均不可用时返回 None。
     """
     try:
         import pymupdf  # type: ignore
         with pymupdf.open(str(pdf_path)) as doc:
             pages = [pg.get_text().strip() for pg in doc]
     except Exception:
-        return None
+        try:
+            from pypdf import PdfReader  # type: ignore
+            pages = [(pg.extract_text() or "").strip()
+                     for pg in PdfReader(str(pdf_path)).pages]
+        except Exception:
+            return None
     problems = []
     if len(pages) >= 2 and not pages[1].startswith("SALES INTELLIGENCE"):
         problems.append(f"P1 溢出：物理第 2 页仅 {len(pages[1])} 字符且非 P2 节头"
@@ -1416,6 +1476,54 @@ def count_pdf_pages(pdf_path: Path):
         return pages
     counts = [int(n) for n in re.findall(rb"/Count\s+(\d+)", raw)]
     return max(counts) if counts else None
+
+
+def check_pdf_content(pdf_path: Path):
+    """核对业务 PDF 的节顺序、证据内容和近乎空白的续页（V1.2.1-fix：与物理页数无关）。
+
+    证据表自第 3 页起自然分页（可延续到 4、5 页），且第 1 页偶发溢出时第 2 页
+    未必是 SALES INTELLIGENCE。故不再把「第 i 页 = 第 i 节」作为硬约束，改为在
+    合理范围内检索三节标题与关键证据 E#，并防止末页近乎空白。保留对「证据缺失 /
+    空白证据页」的阻断能力。
+    """
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except ImportError:
+        return ["缺少 pypdf，无法自动核对 PDF 内容；请安装 requirements.txt"]
+
+    try:
+        pages = [(page.extract_text() or "").strip()
+                 for page in PdfReader(str(pdf_path)).pages]
+    except Exception as exc:  # noqa: BLE001
+        return [f"PDF 文本读取失败：{exc}"]
+
+    if not pages:
+        return ["PDF 无任何页面"]
+
+    problems = []
+    expected = ("CUSTOMER SNAPSHOT", "SALES INTELLIGENCE", "KEY EVIDENCE")
+    if len(pages) < len(expected):
+        return [f"仅 {len(pages)} 页，缺少业务 PDF 的固定三节"]
+
+    # 第 1 页固定为客户快照（CSS 已 uppercase；pypdf 抽取亦为大写，统一 .upper 比对）
+    if expected[0] not in pages[0].upper()[:250]:
+        problems.append("第 1 页不是 CUSTOMER SNAPSHOT，可能发生跨页溢出")
+
+    # SALES INTELLIGENCE / KEY EVIDENCE 在证据自然分页下可能不在第 2/3 页；
+    # 在合理范围内检索即可（KEY EVIDENCE 必在第 3 页或之后）。
+    if not any(expected[1] in p.upper() for p in pages[:4]):
+        problems.append("前 4 页未出现 SALES INTELLIGENCE 节标题，可能发生跨页溢出")
+    if not any(expected[2] in p.upper() for p in pages[:6]):
+        problems.append("前 6 页未出现 KEY EVIDENCE 节标题，证据可能未渲染")
+
+    # 核心：全篇必须存在 E# 关键证据（确认证据表已写入 PDF，而非空白页）
+    if not any(re.search(r"\bE\d+\b", p) for p in pages):
+        problems.append("全篇缺少 E# 关键证据；请检查附录 A 的绑定与位置")
+
+    # 末页近乎空白（证据分页收尾的表尾 / 图例行不计）：仅当末页 < 80 字符且无 E# 才告警
+    if len(pages) > 3 and len(pages[-1]) < 80 and not re.search(r"\bE\d+\b", pages[-1]):
+        problems.append("末页近乎空白；请检查证据表分页")
+    return problems
 
 
 # ---------------------------------------------------------------- main
@@ -1516,6 +1624,15 @@ def main():
         else:
             print(f"CHECK_pages        : FAIL — 仅 {n_pages} 页（目标 ≥ 3 页）；"
                   "证据表可能未渲染，请核对附录 A")
+            return 6
+
+        content_problems = check_pdf_content(pdf_path)
+        if content_problems:
+            print("CHECK_pdf_content  : FAIL —")
+            for problem in content_problems:
+                print(f"    · {problem}")
+            return 6
+        print("CHECK_pdf_content  : PASS — 固定三节、E# 证据与末页内容已核对")
 
     # ---- V1.2.1-audit：P1/P2 溢出检测（只报告、不阻断）
     if not args.single:
