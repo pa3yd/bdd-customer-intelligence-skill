@@ -194,6 +194,42 @@ LONG_FIELDS = [
     "What Is Missing",
 ]
 
+# ---- V1.2.1-layout（2026-10-19）：Page 1 确定性自动摘要 --------------------
+# 背景：`⟪P2⟫` 依赖模型手工放置 + 字数试错（实测 Technoacque 重跑 5 渲 4 溢出）。
+# 本补丁把「P1 摘要放多少字」从模型判断改为**渲染器确定性规则**：
+#   渲染 → 测 P1 是否溢出 → 按预算档位自动收紧长字段摘要 → 重渲（本地循环，
+#   零模型调用、零积分）。MD 原文一字不删（P2 卡仍显示完整原文）。
+# 仅对 AUTO_SPLIT_FIELDS 白名单生效；评级 / 身份 / 结论字段**永不切分**。
+AUTO_SPLIT_FIELDS = {
+    "Current Wastewater Treatment / Technology",
+    "Priority Site",
+    "Who to Contact",
+    "What Is Missing",
+    "Next Action",
+    "What They Do",
+}
+# 预算档位（P1 摘要字符数）：None=不干预（尊重手工 ⟪P2⟫）→ 逐档收紧
+AUTO_SUMMARY_TIERS = (120, 88, 60)
+MIN_SUMMARY_KEEP = 40          # 最短保留（保护 🟢/🟡 等评级头 + 字段类型）
+AUTO_CUT_CHARS = ("；", "。", "！", "？", "　", "）", "，", " ")
+AUTO_SUMMARY_BUDGET = None      # main() 溢出循环写入；None = 不干预
+AUTO_CUT_LOG = []               # 本轮渲染实际被自动收紧的字段（报告用）
+
+
+def auto_summary(text: str, keep: int) -> str:
+    """确定性截短：在 [MIN_SUMMARY_KEEP, keep] 窗口内找最后一个**优选标点**切开。
+
+    不在标点边界时硬切并加「……」。纯字符串操作，无模型参与。
+    """
+    if len(text) <= keep:
+        return text
+    lo = MIN_SUMMARY_KEEP
+    for cc in AUTO_CUT_CHARS:
+        idx = text.rfind(cc, lo, keep)
+        if idx is not None and idx > lo:
+            return text[: idx + 1].rstrip()
+    return text[:keep].rstrip() + "……"
+
 # Key Evidence 展示条数与上限（V1.1.3：要求 6 ~ 8 条）
 EVIDENCE_CARD_MIN = 6
 EVIDENCE_CARD_LIMIT = 8
@@ -474,6 +510,14 @@ def md_to_html_body(lines):
                             c = c.partition(P2_MARK)[0].strip()
                         elif fname:
                             field_full[fname] = c
+                        # V1.2.1-layout：确定性自动摘要 —— 仅白名单长字段、
+                        # 仅在 main() 溢出循环设置了预算时生效；只改 P1 显示，
+                        # field_full（P2 完整原文）不变。
+                        if (fname in AUTO_SPLIT_FIELDS
+                                and AUTO_SUMMARY_BUDGET
+                                and len(c) > AUTO_SUMMARY_BUDGET):
+                            c = auto_summary(c, AUTO_SUMMARY_BUDGET)
+                            AUTO_CUT_LOG.append(fname)
                     if is_card and ci == 0:
                         t.append(f"<td>{field_label_html(c)}</td>")
                     else:
@@ -1416,26 +1460,50 @@ def main():
         print("\n[FAIL] 证据校验未通过，按导出门禁**不生成 PDF**。请先修复 Markdown 附录 A / 引用。")
         return 5
 
-    # ---- HTML
-    html_doc = build_html(md_text, args.single)
-    if args.html:
-        html_path = Path(args.html).resolve()
-    else:
-        html_path = Path(tempfile.gettempdir()) / (md_path.stem + ".render.html")
-    html_path.write_text(html_doc, encoding="utf-8")
-    print(f"CHECK_html         : PASS — {html_path}")
-
-    # ---- PDF
+    # ---- HTML + PDF（V1.2.1-layout：P1 溢出 → 确定性自动收紧 → 本地重渲）
+    # 背景：此前 P1 溢出靠模型逐字段试错压缩（实测单卡最多 5 渲 4 溢出 + 13 次 Edit）。
+    # 现改为渲染器本地循环：测量（pymupdf，零积分）→ 按档位收紧白名单长字段摘要
+    # → 重渲。MD 原文一字不动；P2 卡仍显示完整原文。
     pdf_path = Path(args.out).resolve() if args.out else md_path.with_suffix(".pdf")
-    try:
+    global AUTO_SUMMARY_BUDGET, AUTO_CUT_LOG
+
+    def _render_once():
+        html_doc = build_html(md_text, args.single)
+        html_path = Path(args.html).resolve() if args.html else \
+            Path(tempfile.gettempdir()) / (md_path.stem + ".render.html")
+        html_path.write_text(html_doc, encoding="utf-8")
         html_to_pdf(html_path, pdf_path)
+
+    flow = None
+    try:
+        _render_once()
     except Exception as e:  # noqa: BLE001
         print(f"CHECK_pdf          : FAIL — {e}")
         print("\n[FAIL] PDF 生成失败。**Markdown 保留不变**，请检查浏览器可用性后重试。")
         return 4
 
+    if not args.single:
+        for tier in AUTO_SUMMARY_TIERS:
+            flow = check_page_flow(pdf_path)
+            if not flow:                      # 无溢出（或 pymupdf 不可用）→ 收手
+                break
+            if not any(p.startswith("P1 溢出") for p in flow):
+                break                         # 仅 P2 溢出不归本循环管
+            # 收紧：重置切割日志 → 设预算 → 本地重渲（零模型调用）
+            AUTO_CUT_LOG = []
+            AUTO_SUMMARY_BUDGET = tier
+            try:
+                _render_once()
+            except Exception as e:  # noqa: BLE001
+                print(f"CHECK_pdf          : FAIL — 自动收紧重渲失败：{e}")
+                return 4
+
     size_kb = pdf_path.stat().st_size / 1024
     print(f"CHECK_pdf          : PASS — {pdf_path} ({size_kb:.1f} KB)")
+    if AUTO_CUT_LOG:
+        uniq = sorted(set(AUTO_CUT_LOG))
+        print(f"CHECK_page_auto    : PASS — 确定性自动摘要生效（预算 {AUTO_SUMMARY_BUDGET} 字符；"
+              f"收紧 {len(uniq)} 字段：{'、'.join(uniq)}）；完整原文仍在 P2 卡与 MD")
 
     # ---- 页数核对（V1.2.1-audit：第 3 页起全量证据自然分页 ⇒ 目标改为「≥ 3 页」；只报告、不阻断）
     if not args.single:

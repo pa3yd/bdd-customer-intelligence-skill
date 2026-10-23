@@ -19,6 +19,8 @@ agent_created: true
 
 **产出不是一份漂亮的背调报告，而是一页情报卡：这家公司是什么、机会在哪、值不值得投入、缺什么、该找谁、下一步做什么。**
 
+> **V1.2.1-a · 联系人字段四要素写法（2026-10-21 · 最小质量修复）**：`关键联系人 Contact` 字段凡同时含「官方角色信箱 / 具名联系人 / 非目标岗具名」，**必须按四要素分段明示**——① 官方渠道（角色信箱＋来源）② 具名（Verified）＋职务照录 ③ 岗位相关性（目标岗 / 非目标岗，非目标岗标 Known / Escalation）④ 决策权一律写 `未知`。**具名个人邮箱不得混入官方渠道、媒体/市场联系人不得作 Primary**。触发案例：某环境工程客户（已背调样例；具名媒体联系人邮箱被下游执行器误判为通用渠道首位）。详见 `references/contact-role-map.md` 情况 B′ 写法补充。**不新增 Internal Key、不改渠道 4 态判定逻辑、不改任何评级**。
+
 > **V1.2.0 · 证据边界修订（2026-10-10）**：① Partner 的销售/订单与**外部 BDD 相关需求**分开；② 母公司证据不得直接抬高子公司机会或需求；③ `Conflict` 在审计层区分直接竞争、工程重叠和部件采购切面；④ `Financial Warning` 的 `No/Unknown` 按检索覆盖与主体层级统一。具体规则以 `references/evidence-policy.md` 第四、六节、`references/bdd-relevance-rules.md` 第五节、`references/sales-conclusion-rules.md` 第 1b 步为准。13 个主卡字段、五值结论和 PDF 三页结构保持不变；历史档案不自动改判。
 > **出卡回归**：边界例见 `references/v12-calibration-cases.md`；必须重核当次证据，不能按公司名套档位。
 > **V1.2.1 · 业务员首屏优化（2026-10-12，仅展示层）**：PDF 第一页改为「决策 / 行动优先」—— Sales Conclusion 原结论卡置顶，紧接 Next Action，随后 Who to Contact 与 What Is Missing；其后为 `01 WHO` / `02 WHY` / `03 WHERE` 三组事实。**13 个 Internal Key 全部保留且每项只显示一次**（12 个字段行 + 1 张结论卡）；主卡表格保留「字段 / 判定」表头行。字段含义、判定值、颜色映射、Page 2 / Page 3 结构、Markdown 输出与归档规则**一律不变**。渲染层只搬运 Markdown 已有字段，不生成新内容、不新增分数或优先等级。详见 `references/output-visual-rules.md` 第九部分。
