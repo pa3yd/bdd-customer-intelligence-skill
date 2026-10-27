@@ -86,7 +86,7 @@ Current Wastewater Treatment / Technology:
   Source: E15 / E16
 ```
 
-**⚠️ Partner Path 的竞争标注**：若其自有工艺与 BDD 目标场景重叠 → 在 `BDD Relevance` 的附注中标注 `Conflict: 潜在竞争`（红色语义）。**不得隐藏、不得淡化。**
+**Partner Path 的竞争标注（V1.2.1-b）**：自有工艺与BDD目标场景重叠只记录Application overlap；不能单独判Conflict=Yes。先核对直接替代、相同采购需求与合作切面，再按partner-judgment-contract.md记录Unknown/Partial/Yes/No。其销售产品或技术组合不得写成其自身工厂已使用的处理工艺；参数须区分企业宣传与独立验证。
 
 ---
 

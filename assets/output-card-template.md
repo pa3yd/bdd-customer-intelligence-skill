@@ -1,3 +1,5 @@
+> **当前V1.2.1-b**：Partner使用references/partner-judgment-contract.md。保持13字段；竞争状态/合作潜力在BDD机会与结论原因内说明，独立采购意向写Demand明细；附录B嵌入唯一bdd-decision输入，render_pdf实际复算。模板中的旧Conflict示例不能替代证据判断。
+
 # 客户情报卡输出模板（V1.2.1）
 
 > **V1.2.1**：**仅展示层**。PDF 第一页改为「决策 / 行动优先」—— 结论卡 + Next Action + Who to Contact + What Is Missing 置顶，其后为 `01 WHO` / `02 WHY` / `03 WHERE` 三组事实；主卡表格保留「字段 / 判定」表头行。**13 个 Internal Key 全部保留、每项只显示一次（12 个字段行 + 1 张结论卡）**；字段含义、判定值、颜色映射、Page 2 / Page 3 结构、Markdown 输出与归档规则一律不变。Markdown 模板本身**未改动**，详见 `references/output-visual-rules.md` 第九部分。
@@ -152,7 +154,7 @@
 | **客户类型 Customer Type** | 类型 + **Path**。Path 必须显式写出：`End-user` / `Partner·EPC` / `Partner·Integrator` / `Partner·Distributor` / `Partner·Technology Partner` / `Undetermined` |
 | **行业匹配 Industry Match** | 对照 `bdd-fit-rules.md` 最小目标市场地图。带颜色 |
 | **现有废水处理 Current Treatment** | **必须带状态徽标**（四态，见下）。End-user 写"现在用什么处理"；Partner 写"能提供哪些技术"。**只写单元名，不写数值。** 查不到 → `⚪ Unknown · Unknown` |
-| **BDD机会 BDD Opportunity** | 四档 + **Opportunity Type**。复合类型写 `主 +| 副`。含竞争关系 → 标 `🔴 Conflict` |
+| **BDD机会 BDD Opportunity** | 四档 + **Opportunity Type**。复合类型写 `主 +| 副`。已证实直接替代才标 `Conflict = Yes`；应用重叠标Unknown/Partial并解释 |
 | **需求状态 Demand Status** | 主卡只写**较高者**；两类的明细写在下方"Demand Status 明细" |
 | **优先厂区 Priority Site** | **仅 ≥ 3 个公开厂区的集团使用**；否则写 `N/A` |
 | **关键联系人 Contact** | **`主体（法人 / 业务主体）→（职能单位 →）目标岗位`** —— 三段式首选；**职能单位无公开来源 → 退化为二段式，不得推测部门名称**。可选具名 + 职位 + Source。**查不到真人时不得停住**：输出 `No verified contact found` ＋「**建议检索路径**」（**只回答去哪里找，不生成任何人名 / 邮箱 / 电话**）。**存在具名但非目标岗位时**按「**部分具名**」处理：具名者标为 Known / Escalation，**Primary Contact 仍须显示目标角色 + `No verified contact found`**。规则见 `references/contact-role-map.md` 第一、三节（情况 A / A′ / B / B′ / C） |
@@ -364,13 +366,13 @@ UNKNOWN 必须带三态后缀（`searched` / `no source` / `not searched`），�
 
 | 项 | 值 | 理由 |
 |---|---|---|
-| `Conflict` | **`Yes`**（`Integration overlap`） | {一句话理由 + E#；子类未证实时写「未证实同域专有产品」} |
+| `Conflict` | **`Unknown`**（`Integration overlap; substitution not verified`） | {一句话理由 + E#；子类未证实时写「未证实同域专有产品」} |
 
 > **写法硬约束（防解析返工 · 2026-10-13 成本优化 Patch 1）**：
 > ① **值只写 `**`Yes`**` / `**`No`**` / `**`Unknown`**`** —— 加粗 + 反引号，三值之一；
-> ② **子类写在 `**Yes**` 之外**，用全角括号括注：`**`Yes`**（`Integration overlap`）`；
+> ② **子类写在状态值之外**，用全角括号括注：`**`Unknown`**（`Integration overlap; substitution not verified`）`；
 > ❌ 错例：`**`Yes`（Integration overlap）**`（子类写进加粗内）· `**Yes（Integration overlap）**`；
-> ③ 子类仅三个：`Direct competitor` / `Integration overlap` / `Component procurement`；无子类写 `（无）` 或省略括注；
+> ③ 子类按本次证据填写：`Direct competitor` / `Integration overlap` / `Component procurement` / `Competition and cooperation` / `Complementary Opportunity` / `Insufficient substitution evidence`；无子类写 `（无）` 或省略括注；
 > ④ **一张卡只写一条 `Conflict` 标准行**；「与历史版本差异」对比表另起一行，**首格改写 `Conflict 取值`**（不要再用 `Conflict`，避免与标准行同格名）。
 > ⑤ 本节**只记事实与子类**，不改变 `BDD Opportunity` / `Sales Conclusion` 的任何判定（判据见 `references/bdd-relevance-rules.md` 第五节）。
 

@@ -66,6 +66,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+import decision_engine
 
 # ---------------------------------------------------------------- 主卡 13 字段
 # 来源：assets/output-card-template.md（V1.1 / V1.1.1）
@@ -1283,6 +1284,9 @@ def build_html(md_text: str, single: bool) -> str:
     V1.2.1：第一页将现有结论、下一步、联系人、缺项组成决策/行动模块置顶；
     其后仅显示 WHO / WHY / WHERE 事实分组，13 个 Internal Key 各显示一次。
     """
+    consistent, problems, _ = check_decision_consistency(md_text)
+    if not consistent:
+        raise ValueError("报告判断不一致：" + "；".join(problems))
     pdf_md, _audit_md = split_audit_sections(md_text)
     lines = pdf_md.splitlines()
     blocks, _, field_full = md_to_html_body(lines)
@@ -1529,6 +1533,15 @@ def check_pdf_content(pdf_path: Path):
 # ---------------------------------------------------------------- main
 
 
+def check_decision_consistency(md_text):
+    business, _ = split_audit_sections(md_text)
+    _, _, fields = md_to_html_body(business.splitlines())
+    match = re.search(r">[^\n]*Sales Conclusion[^\n]*\n((?:>[^\n]*(?:\n|$))+)", business)
+    if match:
+        fields["Sales Conclusion"] = match.group(1)
+    return decision_engine.check_report(md_text, fields)
+
+
 def main():
     ap = argparse.ArgumentParser(description="BDD Customer Intelligence — MD → HTML → PDF")
     ap.add_argument("input", help="输入 Markdown 文件")
@@ -1543,6 +1556,11 @@ def main():
         return 2
 
     md_text = md_path.read_text(encoding="utf-8")
+    consistent, decision_problems, decision = check_decision_consistency(md_text)
+    if not consistent:
+        print("CHECK_decision     : FAIL — " + "；".join(decision_problems))
+        return 6
+    print("CHECK_decision     : " + ("PASS — " + decision["rule_version"] if decision else "LEGACY — 保留历史规则，未执行新Partner重评"))
 
     # ---- 校验（硬门禁：缺字段不出 PDF）
     ok, missing, found = validate(md_text)

@@ -11,9 +11,12 @@ description: |
 agent_created: true
 ---
 
-# BDD 客户情报与背调 · V1.2.1
+# BDD 客户情报与背调 · V1.2.1-b
 
 针对 BDD 电极 / 电化学氧化废水处理业务（Boromond / 波乐美）的客户情报工具。
+
+> **V1.2.1-b · 判断一致性修复（2026-10-26）**：这是当前生效补丁。Partner报告先读 `references/partner-judgment-contract.md`；应用重叠不等于直接替代；竞争、BDD机会、开发优先级、采购意向、技术合作潜力分别判断。先完成官网导航/页脚/团队/合作检索再评级，不因预先评低而跳过联系人检索。性能宣传须标 Company-stated claim，独立验证另取证。Partner证据以 `scripts/decision_engine.py` 复算，输入放在附录B的 `bdd-decision` JSON代码块；真正出PDF的 `scripts/render_pdf.py` 会强制核对。保留13主卡字段、五值结论和End-user原有规则；不改发送权限，不重评历史档案。
+
 
 **唯一职责：对潜在客户进行完整企业背调，输出客户开发判断依据。**
 
@@ -651,7 +654,7 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 - **给 `High` 时必须列出 ≥ 2 项主体级证据编号**，且 Gate 必须为 `Strong`（`Reason` 中写明命中的 BDD-specific 信号）
 - **Gate 结果记入 Markdown 附录 B（审计信息）**，不进业务 PDF、不新增字段
 - **禁止输出任何技术参数与数值区间**
-- 若伙伴方自有工艺与 BDD 场景重叠 → **必须标注 `Conflict: 潜在竞争`**
+- 若伙伴方自有工艺与 BDD 场景重叠 → **记录 Application overlap；直接替代证据不足时 Conflict = Unknown；有可核互补/集成切面时 Partial / Use-case dependent**
 - **Partner 专用顺序（Partner Gate Patch 2026-09-27 起）**：条件 A（Industry Fit ∈ {Target, Adjacent}）→ B（能力确认）→ C（技术组合重叠）→ D（≥ 2 项渠道 / 项目证据）→ **E（`Partner Cooperation Evidence ∈ {Confirmed, Supported}`）** → **F（Conflict 控制）**；**A~F 全满足才可判 `High`**。
 - **`Partner Cooperation Evidence` = `Unverified` / `Conflict`（无开放证据）→ 不得 `High`**（通常 `Medium`）；`Supported` + `Conflict = Yes` → **通常最高 `Medium`**；`Confirmed` + `Conflict = Yes` → 按「BDD 域相关性 / 机制外部性」两维度重算 `High` 或 `Medium`
 - **V1.2.0 主体归属门槛**：A～F 分别记录证据所指的法律主体；母公司技术许可/订单不得直接计为子公司 `Confirmed` 或 `High`。化学品分销/代工不能单独证明外部 BDD 设备代理机制。
@@ -712,7 +715,7 @@ End-user  /  Partner·EPC  /  Partner·Integrator  /  Partner·Distributor  /  P
 
 - 按 **Path / 客户类型**推荐**岗位角色**；集团型优先接触 `Priority Site` 对应厂区
 - 公开来源确实查到真人时可展示 `Name + Position + Source`
-- 查不到 → `No verified contact found`（**岗位角色仍输出**）
+- 个人联系人未找到时写 `No verified named contact found`；公司邮箱/电话/合作表单独立列出，岗位角色仍输出；区分未检索、已检索未发现与无法访问
 - **禁止生成人名 / 电话 / 邮箱 / 微信**
 - 按 `Demand Status` + `Commercial Risk` 组合选择接触策略（矩阵已补齐全部单元格，`Risk = Unknown` **按中等处理**）
 

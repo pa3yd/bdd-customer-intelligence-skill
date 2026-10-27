@@ -433,3 +433,10 @@ Business Change Signal: Yes / No / Unknown
 - [ ] `Financial Warning` 白名单（6.1）是否覆盖实际遇到的财务困境形态？
 - [ ] `Business Change Signal` 是否需要更强的展示位（当前仅 Markdown + 结论原因中提一句）？
 - [ ] `Decision Impact` 的三档定义是否符合使用习惯？
+
+
+## V1.2.1-b · 企业声明、独立验证与判断置信度
+
+官网原文可以证明“企业公开如此声明”，不能证明宣传效果已独立验证。性能、去除率、能耗、机理参数等必须标 `Company-stated claim`，独立测试另列报告机构、方法、样品条件及适用范围。`FACT`的对象是可来源化的声明；不得把该声明外推为客户现场达标或BDD适用性。
+
+来源可靠性、证据类型F/I/U、独立验证状态、商业机会档位和判断置信度分别记录。单一官网多个页面不是多个独立来源；由官网事实推断出的竞争/合作关系仍是INFERENCE，缺直接替代证据不能标High竞争置信度。INFERENCE必须引用FACT编号和推理依据；UNKNOWN区分not_searched、searched_not_found、unavailable、no_source，不自动补全。

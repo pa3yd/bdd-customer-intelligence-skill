@@ -222,12 +222,11 @@ Recommended Contact Role: {三段式 或 二段式}
 
 ### 官方联系方式补查阶梯（邮箱检索 · **强制前置动作**）
 
-> **触发条件**：目标**已判定值得开发**（`Sales Conclusion ∈ {建议重点开发, 建议开发, 建议先验证}`），
-> 但**尚未取得官方邮箱**（`CONTACT_OFFICIAL_ONLY` / `CONTACT_NONE`）。
+> **触发条件**：所有本次背调目标在最终评级前执行一次官网联系方式核对；**尚未取得官方邮箱**（`CONTACT_OFFICIAL_ONLY` / `CONTACT_NONE`）。
 > **此时必须先执行本阶梯补查一次**，再决定是否降级为「仅官方渠道」。
 > （2026-10-13 立 · 某德国水技术商实测：官网全站页脚含角色邮箱，但被 Cloudflare 保护，markdown 转换首轮遗漏。）
 
-**执行阶梯（按序，命中即可停）**
+**执行阶梯（邮箱命中后仍核对团队/合作入口；有界导航发现，默认最多16页）**
 
 | 序 | 目标 | 说明 |
 |---|---|---|
@@ -324,3 +323,10 @@ python scripts/fetch_official_contacts.py --url <精确页>
 - [ ] 是否有其他常见岗位需要补入（如第三方运维方）？
 - [ ] 允许的"公开来源"清单是否需要增删？
 - [ ] 「转交技术评估流程」的接收方是谁、SLA 如何？
+
+
+## V1.2.1-b · 完整官网检索覆盖
+
+先读实际官网首页导航及页脚，再跟随同域Contact、Team、About、News、Partnership、Inquiry链接，不仅猜固定英文路径。邮箱、电话、合作表单、团队原文分别记录原始URL、检索时间、证据类型。脚本输出team_pages供逐字核对人名/职务；不把姓名与邮箱自动配对，也不凭高管职位推定采购权。个人邮箱未找到不否定官方渠道。
+
+`search_status`四态：not_searched / found / searched_not_found / unavailable。部分页面失败时同时保留逐页状态和未访问URL，不能声称完整检索。`observed_on_official_page`仅说明公开出现，不代表邮箱可投递或个人归属已核实；deliverability保持Unknown。表单仅在实际发现时记录，不自动提交。跨域跳转主体不明时保留unavailable，需明确核实官方别名域。
